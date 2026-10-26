@@ -48,6 +48,21 @@ def compile_source(source, destination, record, extra):
             command.append(value)
         index += 1
     command += list(extra)
+    # Drop -I entries whose directory does not exist: bsd_init.o records
+    # EXPORT_HDRS/libsa, which this stage has not produced yet.
+    filtered, index = [], 0
+    while index < len(command):
+        value = command[index]
+        if value == '-I' and index + 1 < len(command):
+            if not Path(command[index + 1]).is_dir():
+                index += 2
+                continue
+            filtered.extend([value, command[index + 1]])
+            index += 2
+            continue
+        filtered.append(value)
+        index += 1
+    command = filtered
     result = subprocess.run(command, cwd=record['directory'], capture_output=True, text=True)
     (destination.parent / (destination.stem + '.log')).write_text(result.stdout + result.stderr)
     require(result.returncode == 0, f'{source.name} failed:\n{(result.stdout + result.stderr)[-4000:]}')
@@ -114,7 +129,10 @@ def main():
     print(f'assembly: {assembly}')
 
     record = json.loads(RECORD.read_text().strip().rstrip(','))
-    include = ['-I', str(args.kit / 'include'), '-Werror']
+    # -Wno-missing-include-dirs first: the recorded kernel command line carries
+    # include directories the archive stage has not created yet, and -Werror
+    # would promote that diagnostic to a failure.
+    include = ['-Wno-missing-include-dirs', '-I', str(args.kit / 'include'), '-Werror']
     objects = []
     for source in (args.kit / 'src/verified_root.c', args.kit / 'adapters/xnu_crypto.c'):
         destination = out / (source.stem + '.o')
