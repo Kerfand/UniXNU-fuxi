@@ -9,65 +9,83 @@
 <p align="center">
   <a href="https://unixnu.com"><img alt="Documentation" src="https://img.shields.io/badge/docs-unixnu.com-2A5BD7?logo=readthedocs&logoColor=white"></a>
   <a href="https://t.me/unixnu"><img alt="Telegram" src="https://img.shields.io/badge/Telegram-@unixnu-26A5E4?logo=telegram&logoColor=white"></a>
-  <a href="https://qun.qq.com/universal-share/share?ac=1&authKey=Pubz23DOCY76nxjlGuSms2zesk4jRvas4zrXJRYk7omf7CprXbGQigLEI%2BCoYR8D&busi_data=eyJncm91cENvZGUiOiIxMTI2MTE2NzU5IiwidG9rZW4iOiJwSHJsUDN1UnN2Vi8yM210TjJRbzBIcERmcUpyOS9lb0hHVVpadWdvVFdScVpSYUFLT1YzTk5TWC9mN2xWYmtIIiwidWluIjoiMzE1MTEwOTc0MSJ9&data=_cJgr-jX9yJ2-GXwVjRN5FOhDyk5B-HAfIk5LSunbW_XkkmKqNXbpH33wzP93J0p9DI1fbjgBUrUfTVhwDcxjg&svctype=4&tempid=h5_group_info"><img alt="QQ Group" src="https://img.shields.io/badge/QQ%20Group-join-12B7F5?logo=qq&logoColor=white"></a>
   <a href="https://x.com/unixnu"><img alt="X" src="https://img.shields.io/badge/X-@unixnu-000000?logo=x&logoColor=white"></a>
 </p>
 
-# UniXNU-sheng
+# UniXNU-fuxi
 
-Device repository for the Xiaomi Pad 6S Pro (sheng, SM8550). It holds the board file, kernel defconfig, device scripts, drivers and package.
+Device repository for the Xiaomi 13 (fuxi, SM8550). It holds the board file, kernel
+defconfig, device scripts, drivers and package.
 
-🎉 **News:** The native Metal GPU driver is fully working on sheng. The render server composites the system UI through the Adreno 740, and listed processes get their own Metal devices.
+The target userland is the **iPhone 10,3 (d22ap) iOS 16.7.16, build 20H392** restore image.
+The kernel source is `xnu-8796.141.3` built as Darwin 23.6.0.
+
+**Current state (2026-10-26):** the UFS transport, the apps-SMMU takeover, LUN 0 GPT parsing
+and the flashed root image layout are verified on hardware. Root publication is not enabled
+yet, so the kernel still stops at a deliberate diagnostic panic instead of mounting a root
+volume. Details and evidence: **[PORTING-FUXI.md](PORTING-FUXI.md)**.
 
 - [Documentation](https://unixnu.com)
-- [Device page](https://unixnu.com/devices/sheng)
+- [Device page](https://unixnu.com/devices/fuxi)
 - [Porting guide](https://unixnu.com/porting/)
-- [Build](https://unixnu.com/building)
+- [Porting record](PORTING-FUXI.md)
+- [UFS porting](https://unixnu.com/porting/ufs)
 
-Firmware: [uefi-sheng](https://github.com/UniXNU/uefi-sheng).
+Firmware: [Sohytrs/uefi-fuxi](https://github.com/Sohytrs/uefi-fuxi), branch `fuxi`.
+The UFS driver is pinned to
+[ljhhkx529/NativeUFS-fuxi](https://github.com/ljhhkx529/NativeUFS-fuxi) at `e9ae0f61`.
 
-Build with the `unixnu` driver of [UniXNU](https://github.com/UniXNU/UniXNU). Clone both repositories with `--recurse-submodules`; `unixnu fetch` also updates the module submodules.
+Build with the `unixnu` driver of [UniXNU](https://github.com/UniXNU/UniXNU). Clone both
+repositories with `--recurse-submodules`; `unixnu fetch` also updates the module submodules.
 
 ## Build
 
-Run these commands from the UniXNU checkout. The device repository is `../UniXNU-sheng`.
+The kernel needs a Mac. Without one, run the kernel and payload steps in the
+[macOS runner workflow](https://github.com/UniXNU/UniXNU/actions/workflows/macos.yml):
+
+| Input | Value |
+| --- | --- |
+| `device_repository` | `Kerfand/UniXNU-fuxi` |
+| `device_ref` | `main` |
+| `defconfig` | `fuxi_defconfig` |
+| `steps` | `kernel payload` |
+
+`scripts/build-fuxi-platform-power.py` and `scripts/build-fuxi-ufs.py` require
+`FUXI_PMGR_REFERENCE_KERNEL` to name a kernel with sha256
+`c9e0debc23acc035a8b406e58088a3dd1a5f7e7a5203421b13b09b6e2a1abeb9`. This repository publishes
+it as the release asset `fuxi-pmgr-baseline/kernel.macho`, and `pre_build` downloads it:
 
 ```sh
-./unixnu defconfig sheng_defconfig -D ../UniXNU-sheng
-./unixnu fetch
-./unixnu ipsw fetch
-./unixnu build kernel
-./unixnu build package
-./unixnu build firmware --uefi ../uefi-sheng
-./unixnu build payload --unique-chip-id <hex> --trust-cache <bundle> --data-ramdisk <seed>
-./unixnu bootimg --uefi ../uefi-sheng --dtb <sheng.dtb>
+mkdir -p "$RUNNER_TEMP/fuxi-pmgr-baseline"
+GH_TOKEN="$GITHUB_TOKEN" gh release download fuxi-pmgr-baseline -R "$GITHUB_REPOSITORY" \
+  -p kernel.macho -D "$RUNNER_TEMP/fuxi-pmgr-baseline"
+echo "FUXI_PMGR_REFERENCE_KERNEL=$RUNNER_TEMP/fuxi-pmgr-baseline/kernel.macho" >> "$GITHUB_ENV"
 ```
 
-The [device page](https://unixnu.com/devices/sheng#build) adds the userdata image and the Data seed growth commands. The platform seed, trust cache and Data seed are device inputs. Use `--owner-trust-cache <bundle>` for an owner-signed bundle.
+A fork's `GITHUB_TOKEN` cannot read another repository's workflow artifacts, so
+`gh run download -R <upstream>` does not work here; a release asset in this repository does.
 
-Without a Mac, run the kernel and userdata steps in the [macOS runner workflow](https://github.com/UniXNU/UniXNU/actions/workflows/macos.yml). The [build guide](https://unixnu.com/building#macos-runner) lists its inputs.
+The build produces `fuxi/kernel/kernel.macho` and `fuxi/payload/payload.img`. Packing a boot
+image means appending the payload after the firmware volume and setting the BootShim load
+size at image-header offset `0x10` to `shim + FV + payload` (`0x0C300200`), then gzip'ing and
+appending the board DTB. See the findings in [PORTING-FUXI.md](PORTING-FUXI.md).
 
 ## Device support
 
-The original iPadOS userland runs from the IPSW; the home screen and Settings are reached. This table records user-facing device support.
-
 | Feature | State | Notes |
 | --- | --- | --- |
-| Touch | ✅ | Novatek NT36532E |
-| Display | ✅ | |
-| UFS | ✅ | Native UFS root |
-| Wi-Fi | ❌ | |
-| Bluetooth | ❌ | |
-| Camera | ❌ | |
-| GPU | ✅ | Native Metal, GPU compositing, per-process devices and exported pipeline caches |
-| USB | ❌ | |
-| Audio | ❌ | |
-| Sensors | ❌ | |
-| Battery driver | ❌ | |
-| MiPPS | ❌ | |
-| Suspend and resume | ❌ | |
+| UEFI, UniXNU, DarwinBoot | ✅ | reaches XNU |
+| UFS transport and SMMU | ✅ | controller adoption, stream `0x60`, command queues |
+| GPT and root image layout | ✅ | `manifest status=0`, both windows placed and readable |
+| Root volume mount | ❌ | needs an owner-signed per-capacity policy bundle |
+| Native UFS root | ❌ | same gate as above |
+| Touch | ❌ | |
+| Display | ❌ | |
+| GPU | ❌ | |
+| Wi-Fi, Bluetooth, USB, audio | ❌ | |
+| Battery, sensors, suspend | ❌ | |
 
-✅ available, ⚠️ partial, ❌ not available. The GPU details are in the [Adreno 740 driver](https://unixnu.com/drivers/native-adreno) page.
+✅ verified on hardware, ⚠️ partial, ❌ not available.
 
 ## License
 
