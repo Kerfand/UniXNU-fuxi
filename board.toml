@@ -206,7 +206,7 @@ kernel_args = [
   "offline-apfs-load=1",
   "boot-progress=2",
   "sheng-pmgr=2",
-  "native-ufs-probe=10",
+  "native-ufs-probe=11",
   "native-ufs-diagnostics=1",
   "-apfs_shared_datavolume",
   "offline-key-events=1",
@@ -216,9 +216,14 @@ kernel_args = [
   "ml-timeout-lock-panic-scale=40",
 ]
 
-# native-ufs-root=1 stays off in FIX061.  probe=10 always stops with a bounded
-# diagnostic panic after the read-only controller/GPT/manifest check; it never
-# publishes writable media and never writes to UFS.
+# native-ufs-root=1 stays off.  probe=11 always stops with a bounded diagnostic
+# panic: for every window of the flashed SHNGROOT image it reports the absolute
+# userdata offset, the recorded size and hash, and the signature word at +512 of
+# the window's first block, so a wrong placement is caught before any mount.
+# It never publishes media and never writes to UFS.  Root publication needs a
+# signed per-capacity policy bundle from kits/VerifiedRoot (tools/manifest.py);
+# this board does not generate one yet, and NativeUfs::signedVolumeUuid()
+# returns false without it.
 
 [payload.adt]
 tool = "scripts/make-sheng-adt.py"
