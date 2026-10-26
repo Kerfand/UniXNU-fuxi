@@ -18,6 +18,7 @@ claimed and no property is invented beyond these pinned sources.
 """
 from pathlib import Path
 import argparse
+import hashlib
 import os
 import struct
 import zlib
@@ -98,6 +99,10 @@ def main():
     parser.add_argument('--data-ramdisk', action='store_true',
                         help='/chosen/memory-map RAMDisk placeholder; the loader fills in the real range for a scratch Data seed')
     parser.add_argument('--trust-cache', action='store_true', help='Zeroed TrustCache sidecar handoff placeholder')
+    parser.add_argument('--boot-manifest-hash', default=None,
+                        help='/chosen/boot-manifest-hash as 1..48 bytes of hexadecimal. XNU reads it and '
+                             'the original /sbin/mount -P 1 exits 66 without it; with --iphone-identity a '
+                             'documented fixed stand-in is published instead')
     args = parser.parse_args()
     if (args.unique_chip_id is None) != (args.chip_id is None):
         parser.error('--unique-chip-id and --chip-id must be supplied together')
@@ -107,6 +112,21 @@ def main():
             not 0x10000000 <= args.owned_memory_size <= 0x200000000
             or args.owned_memory_size % 0x200000):
         parser.error('Owned memory must be 256 MiB to 8 GiB, aligned to 2 MiB')
+    if args.boot_manifest_hash is None and args.iphone_identity:
+        # XNU reads /chosen/boot-manifest-hash and the original /sbin/mount -P 1 exits 66
+        # when the property is absent. This source boot has no Apple previous-stage
+        # manifest to hash, so publish a fixed stand-in, the same convention
+        # dipa-studio/ios-sweet uses in tools/mkadt.py. A board holding a real iBoot
+        # manifest hash passes --boot-manifest-hash and overrides it.
+        args.boot_manifest_hash = hashlib.sha384(b'UniXNU boot manifest').hexdigest()
+    if args.boot_manifest_hash is not None:
+        try:
+            manifest_hash = bytes.fromhex(args.boot_manifest_hash)
+        except (TypeError, ValueError):
+            parser.error('--boot-manifest-hash must be hexadecimal')
+        if not 1 <= len(manifest_hash) <= 48:
+            parser.error('--boot-manifest-hash must be 1..48 bytes (SHA-384 or shorter)')
+        args.boot_manifest_hash = manifest_hash
 
     try:
         cpu_regs = [int(value, 0) for value in args.cpu_regs.split(',')]
@@ -154,6 +174,10 @@ def main():
                         # Image4 hash algorithm. The target iPad's DT specifies sha2-384 in /chosen; this
                         # selects the algorithm only and asserts nothing about Apple silicon or fuses.
                         ('crypto-hash-method', b'sha2-384\0'),
+                        # XNU reads this (iokit/bsddev/IOKitBSDInit.cpp) and the original
+                        # /sbin/mount -P 1 exits 66 when it is absent, so it is always present.
+                        *([('boot-manifest-hash', args.boot_manifest_hash)]
+                          if args.boot_manifest_hash else []),
                         # iOS 16 AppleImage4 requires this 32-bit /chosen policy;
                         # absence returns ENOENT (2) and panics during init.
                         # This source-XNU bring-up combines independently built
