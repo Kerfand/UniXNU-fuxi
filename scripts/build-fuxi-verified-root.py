@@ -62,6 +62,12 @@ def main():
     parser.add_argument('--out', type=Path, default=ROOT / 'build/verified-root-fuxi')
     args = parser.parse_args()
 
+    # Archive entries are not substituted and run from an unspecified working
+    # directory, so resolve relative inputs against the build tree.
+    args.os_manifest = args.os_manifest if args.os_manifest.is_absolute() else ROOT / args.os_manifest
+    args.systemos_manifest = (args.systemos_manifest if args.systemos_manifest.is_absolute()
+                              else ROOT / args.systemos_manifest)
+    args.trusted_key = args.trusted_key if args.trusted_key.is_absolute() else ROOT / args.trusted_key
     for path in (args.os_manifest, args.systemos_manifest, args.trusted_key):
         require(path.is_file(), f'missing input: {path}')
     key = args.trusted_key.read_bytes()
