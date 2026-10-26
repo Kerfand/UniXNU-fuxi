@@ -75,7 +75,7 @@ def compile_source(path, destination, extra=()):
         index += 1
     command += ['-I', ROOT / 'build/storage-abi/include', '-I', ROOT / '.cache/xnu-work/osfmk',
                 '-Wall', '-Wextra', '-Werror', '-Wno-unused-parameter', '-Wno-deprecated-declarations',
-                '-Wno-c99-designator', '-Wno-reorder-init-list', '-Wno-unnecessary-virtual-specifier',
+                '-Wno-c99-designator', '-Wno-reorder-init-list', '-Wno-unknown-warning-option', '-Wno-unnecessary-virtual-specifier',
                 '-Wno-deprecated-enum-enum-conversion', '-mgeneral-regs-only', *extra]
     (OUT / (destination.stem + '-command.json')).write_text(json.dumps(list(map(str, command)), indent=2) + '\n')
     result = subprocess.run(list(map(str, command)), cwd=record['directory'], capture_output=True, text=True)
