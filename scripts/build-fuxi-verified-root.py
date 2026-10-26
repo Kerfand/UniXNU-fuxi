@@ -16,6 +16,7 @@ and no sample blocks: nothing in the kernel path reads them.
 """
 import argparse
 import hashlib
+import os
 import json
 import struct
 import subprocess
@@ -55,19 +56,23 @@ def compile_source(source, destination, record, extra):
 def main():
     parser = argparse.ArgumentParser(description=__doc__,
                                      formatter_class=argparse.RawDescriptionHelpFormatter)
-    parser.add_argument('--os-manifest', type=Path, required=True)
-    parser.add_argument('--systemos-manifest', type=Path, required=True)
-    parser.add_argument('--trusted-key', type=Path, required=True)
+    parser.add_argument('--policy-dir', type=Path,
+                        default=Path(os.environ.get('FUXI_ROOT_POLICY', '')),
+                        help='directory holding verified-root-os/ and verified-root-systemos/ '
+                             '(default: $FUXI_ROOT_POLICY)')
+    parser.add_argument('--os-manifest', type=Path, default=None)
+    parser.add_argument('--systemos-manifest', type=Path, default=None)
+    parser.add_argument('--trusted-key', type=Path, default=None)
     parser.add_argument('--kit', type=Path, default=ROOT / 'kits/VerifiedRoot')
     parser.add_argument('--out', type=Path, default=ROOT / 'build/verified-root-fuxi')
     args = parser.parse_args()
+    if args.policy_dir is not None and str(args.policy_dir):
+        policy = args.policy_dir if args.policy_dir.is_absolute() else ROOT / args.policy_dir
+        args.os_manifest = args.os_manifest or policy / 'verified-root-os/manifest.bin'
+        args.systemos_manifest = args.systemos_manifest or policy / 'verified-root-systemos/manifest.bin'
+        args.trusted_key = args.trusted_key or policy / 'verified-root-os/trusted-key.bin'
+    require(args.os_manifest is not None, 'no policy directory: set FUXI_ROOT_POLICY or pass --policy-dir')
 
-    # Archive entries are not substituted and run from an unspecified working
-    # directory, so resolve relative inputs against the build tree.
-    args.os_manifest = args.os_manifest if args.os_manifest.is_absolute() else ROOT / args.os_manifest
-    args.systemos_manifest = (args.systemos_manifest if args.systemos_manifest.is_absolute()
-                              else ROOT / args.systemos_manifest)
-    args.trusted_key = args.trusted_key if args.trusted_key.is_absolute() else ROOT / args.trusted_key
     for path in (args.os_manifest, args.systemos_manifest, args.trusted_key):
         require(path.is_file(), f'missing input: {path}')
     key = args.trusted_key.read_bytes()

@@ -86,12 +86,13 @@ archives = [
   # proves the fuxi controller/SMMU hand-off and the flashed SHNGROOT manifest.
   "build-fuxi-ufs.py",
   # Signed owner policy for the OS and SystemOS windows. The manifests are 65 MB of
-  # block hashes, so they are not in the repository: pre_build unpacks the release
-  # asset fuxi-root-policy of the framework repository into the device checkout as
-  # policy/. Regenerate them with scripts/build-fuxi-root-policy.py when the windows
-  # or the owner key change. Archive arguments are not substituted, so these are
-  # paths relative to the build tree and the script resolves them against ROOT.
-  "build-fuxi-verified-root.py --os-manifest policy/verified-root-os/manifest.bin --systemos-manifest policy/verified-root-systemos/manifest.bin --trusted-key keys/trusted-key.bin",
+  # block hashes, so they are not in the repository: pre_build downloads the release
+  # asset fuxi-root-policy of the framework repository and publishes its directory
+  # as FUXI_ROOT_POLICY through GITHUB_ENV. Archive entries get no substitution and
+  # the build tree only holds tracked files, so an environment variable is the only
+  # input that survives. Regenerate the manifests with
+  # scripts/build-fuxi-root-policy.py when the windows or the owner key change.
+  "build-fuxi-verified-root.py",
 # build-fuxi-stub.py defines, weakly, the native symbols the XNU patches reference even
 # when their feature is off. Without it the link stops on native_legacy_display_probe,
 # boot_progress_poll, the verified-root chain and mockfs.
