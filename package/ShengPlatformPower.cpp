@@ -54,7 +54,7 @@ void ShengPlatformPower::operator delete(void *memory, size_t size)
 {
   OSObject::operator delete(memory, size);
 }
-static_assert(sizeof(ShengPlatformPower) == 0x4b8a8, "Exact original provider storage");
+static_assert(sizeof(ShengPlatformPower) == 0x36968, "Exact iPhone10,3 provider storage");
 
 static const OSMetaClass *lookup(const char *text)
 {
@@ -75,7 +75,7 @@ extern "C" void sheng_pmgr_run(void)
   kern_return_t result = OSKextLoadKextWithIdentifier("com.apple.driver.ApplePMGR");
   if (result) { sheng_pmgr_observation[1] = static_cast<uint32_t>(result); sheng_pmgr_checkpoint(); return; }
   const OSMetaClass *parent = lookup("ApplePMGR"), *nubMeta = lookup("ApplePMGRNub");
-  if (!parent || parent != &ApplePMGR::gMetaClass || parent->getClassSize() != 0x4b8a8 ||
+  if (!parent || parent != &ApplePMGR::gMetaClass || parent->getClassSize() != 0x36968 ||
       !nubMeta || nubMeta->getClassSize() != 0x740) { sheng_pmgr_checkpoint(); return; }
   sheng_pmgr_observation[2] = parent->getClassSize();
   void *handle = OSMetaClass::preModLoad(g_kernel_kmod_info.name);

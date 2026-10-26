@@ -154,6 +154,13 @@ def main():
                         # Image4 hash algorithm. The target iPad's DT specifies sha2-384 in /chosen; this
                         # selects the algorithm only and asserts nothing about Apple silicon or fuses.
                         ('crypto-hash-method', b'sha2-384\0'),
+                        # iOS 16 AppleImage4 requires this 32-bit /chosen policy;
+                        # absence returns ENOENT (2) and panics during init.
+                        # This source-XNU bring-up combines independently built
+                        # components, so mix-and-match prevention is explicitly
+                        # off. This is software policy, not an Apple fuse claim.
+                        *([('mix-n-match-prevention-status', struct.pack('<I', 0))]
+                          if args.iphone_identity else []),
                         *( [('root-matching', ('<dict><key>IOProviderClass</key><string>IOMedia</string>'
                                                '<key>IOPropertyMatch</key><dict><key>UUID</key><string>' +
                                                args.root_match_volume_uuid.upper() + '</string></dict></dict>\0').encode())]
@@ -165,7 +172,14 @@ def main():
              [node('memory-map', ([("PackedRAMDisk" if args.packed_data_ramdisk else "RAMDisk", bytes(16))] if (args.data_ramdisk or args.packed_data_ramdisk) else []) +
                                  ([('TrustCache', bytes(16))] if args.trust_cache else [])),
               # Read by the original AppleImage4 at start-up; present and empty here.
-              node('manifest-properties')]),
+              node('manifest-properties'),
+              # The pinned iOS 16 AppleImage4 selects its existing reduced-
+              # security AP when exactly lp-smb0 is present in /chosen/asmb.
+              # A source-XNU test boot has no Apple previous-stage BNCH input;
+              # full-security AP would panic on that absence. Declare the test
+              # policy explicitly instead of manufacturing a nonce hash.
+              *([node('asmb', [('lp-smb0', struct.pack('<I', 1))])]
+                if args.iphone_identity else [])]),
         node('cpus', children=cpus),
         *([node('psci', [('compatible', b'arm,psci-1.0\0'), ('method', args.psci_method.encode() + b'\0')])] if len(cpus) > 1 else []),
         # Suspend/resume is not implemented for this board. Use the original

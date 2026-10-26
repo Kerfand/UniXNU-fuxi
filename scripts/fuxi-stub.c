@@ -41,8 +41,10 @@ FUXI_WEAK const unsigned char mockfs_vnodeop_opv_desc[512] = { 0 };
  * The prelink needs a native address for it because an original kext references it,
  * and this kernel build has no iokitcpp objects. Nothing on the bring-up path drives
  * a DriverKit user server, so a NULL-returning stub only has to satisfy the rebind.
+ * It is deliberately strong: NativePrelink resolves original kext bindings only
+ * against symbols preserved in the final candidate kernel.
  */
-FUXI_WEAK void *IORPCMessageFromMach(void *message, int reply)
+void *IORPCMessageFromMach(void *message, int reply)
 {
 	(void)message; (void)reply;
 	return 0;
@@ -51,7 +53,11 @@ FUXI_WEAK void *IORPCMessageFromMach(void *message, int reply)
 /* --- boot progress weak imports (generated) --------------------------------- */
 /* BootProgress.c weak-imports its counters and row buffers; the kernel link wants
  * definitions. Zeroed weak definitions are enough: the layer only displays them. */
-FUXI_WEAK unsigned long boot_log_tick;
+FUXI_WEAK void boot_log_tick(unsigned tick) { (void)tick; }
+FUXI_WEAK unsigned int boot_log_state;
+FUXI_WEAK unsigned int boot_log_rounds;
+FUXI_WEAK unsigned int boot_log_errors;
+FUXI_WEAK unsigned long long boot_log_first_lba;
 FUXI_WEAK unsigned long boot_process_attempts;
 FUXI_WEAK unsigned long boot_process_busy;
 FUXI_WEAK unsigned long boot_process_capture;
@@ -171,7 +177,6 @@ FUXI_WEAK unsigned long boot_diag_files;
 FUXI_WEAK unsigned long boot_diag_scan;
 FUXI_WEAK unsigned long boot_diag_skipped;
 FUXI_WEAK unsigned long boot_diag_stream;
-FUXI_WEAK unsigned long boot_log_tick;
 FUXI_WEAK unsigned long boot_process_attempts;
 FUXI_WEAK unsigned long boot_process_busy;
 FUXI_WEAK unsigned long boot_process_capture;

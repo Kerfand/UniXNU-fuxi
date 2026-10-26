@@ -215,11 +215,18 @@ static void hex (struct ctx *g, const char *label, u64 v)
 }
 
 /* x0 = fmt as for panic(); x1 is set by the stub to the entry stack pointer. */
-__attribute__((noreturn, used, section(".text.b_main"))) void panic_screen_main (const char *fmt, const u64 *args)
+__attribute__((noreturn, used, section(".text.b_main"))) void panic_screen_main
+  (const char *fmt, const u64 *args, u64 caller_x20, u64 caller_x23, u64 caller_x25,
+   u64 caller_x27, u64 route, u64 original_x6)
 {
   volatile struct vc_info *v = (volatile struct vc_info *)VINFO;
   struct ctx g;
   u32 row, col;
+  #ifdef FUXI_IMAGE4_DIAG
+  /* Sample before painting or calling SecureDT; later values are printed too. */
+  u64 early_allow = readable ((const char *)IMG4_ALLOW, 0) ? *(volatile const u8 *)IMG4_ALLOW : 0xff;
+  u64 caller = (u64)__builtin_return_address (0);
+  #endif
 
   __asm__ volatile ("msr daifset, #15");
   g.base = (u8 *)v->v_baseaddr;
@@ -251,11 +258,31 @@ __attribute__((noreturn, used, section(".text.b_main"))) void panic_screen_main 
   if (PANIC_TEXT && *(volatile u8 *)PANIC_TEXT == 0) {
     g.log = (u8 *)PANIC_TEXT;
   }
+  #ifdef FUXI_IMAGE4_DIAG
+  text (&g, "FIX058 diagnostics\n");
+  /* Keep this optional renderer within the existing verified text padding.
+   * The literal format and first argument slots are diagnostic data, labelled
+   * explicitly, instead of pulling in the full printf parser. */
+  text (&g, "panic format: ");
+  text (&g, fmt);
+  hex (&g, "\narg0=", args[0]);
+  hex (&g, " arg1=", args[1]);
+  hex (&g, "\nLR=", caller);
+  hex (&g, " earlyAllow=", early_allow);
+  hex (&g, "\nroute=", route);
+  hex (&g, " originalX6=", original_x6);
+  hex (&g, "\nx25=", caller_x25);
+  hex (&g, " x27=", caller_x27);
+  (void)caller_x20;
+  (void)caller_x23;
+  #else
   format (&g, fmt, args);
+  #endif
   g.log = 0;
   __asm__ volatile ("dsb sy");
   /* Sample the active CPU translation regime, without changing it. This is
    * panic-time evidence only; it does not establish early mappings or EL0 ABI. */
+  #ifndef FUXI_IMAGE4_DIAG
   {
     u64 tcr, sctlr;
     __asm__ volatile ("mrs %0, tcr_el1" : "=r" (tcr));
@@ -268,6 +295,7 @@ __attribute__((noreturn, used, section(".text.b_main"))) void panic_screen_main 
   (void)MAX_MEM;
   hex (&g, "\npages=", *(volatile const u32 *)PAGE_TOTAL);
   hex (&g, "\nfree=", *(volatile const u32 *)PAGE_FREE);
+  #endif
   /* The raw argument slots are not dumped: the formatted message above already carries them (room for the PANIC_TEXT copy). */
   mark[0] = 0xC0FFEE11u;
   mark[1] = 0x5CEEDA7Au;
@@ -278,7 +306,7 @@ __attribute__((noreturn, used, section(".text.b_main"))) void panic_screen_main 
 /* Entry from panic(): keep the stack pointer, which addresses the variadic arguments. */
 __attribute__((naked, noreturn, section(".text.a_entry"))) void panic_screen (const char *fmt)
 {
-  __asm__ volatile ("mov x1, sp\n\tb panic_screen_main");
+  __asm__ volatile ("mov x1, sp\n\tmov x2, x20\n\tmov x3, x23\n\tmov x4, x25\n\tmov x5, x27\n\tmov x7, x6\n\tmov x6, #0x50\n\tb panic_screen_main");
 }
 
 /* The real panic_trap_to_debugger signature takes (fmt, va_list *, ...).
@@ -288,7 +316,7 @@ __attribute__((naked, noreturn, section(".text.a_entry"))) void panic_screen (co
  */
 __attribute__((naked, noreturn, section(".text.a_common"))) void panic_screen_common (void)
 {
-  __asm__ volatile ("ldr x1, [x1]\n\tb panic_screen_main");
+  __asm__ volatile ("ldr x1, [x1]\n\tmov x2, x20\n\tmov x3, x23\n\tmov x4, x25\n\tmov x5, x27\n\tmov x7, x6\n\tmov x6, #0x43\n\tb panic_screen_main");
 }
 
 #include "Font.h"
