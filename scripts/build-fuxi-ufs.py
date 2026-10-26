@@ -238,10 +238,20 @@ for name in ('SmmuTakeover', 'RootPublication', 'RootWindowRead', 'RootDiagnosti
     binary = OUT / ('test-' + name)
     run(['xcrun', 'clang++', '-std=c++17', '-Wall', '-Wextra', '-Werror', tests / (name + '.cpp'), '-o', binary])
     print(run([binary], text=True).strip())
-# Root mode is explicitly a development transport without an owner-signed
-# per-block verification policy; the configured probe only reads GPT/manifest.
+# Compile the verified-block transport. The owner policy bundle is linked
+# from build/verified-root-fuxi: without it vr_open is undefined, and
+# without NATIVE_VERIFIED_BLOCK the driver refuses to publish a root at all
+# (startRoot's validate() returns false in that case).
 obj = OUT / 'NativeUfs.o'
-compile_source(staged / 'NativeUfs.cpp', obj)
+require((ROOT / 'kits/VerifiedRoot/include').is_dir(),
+        'missing kits/VerifiedRoot; run git submodule update --init kits/VerifiedRoot')
+require((ROOT / 'drivers/NativeVirtioBlock/VerifiedBlockPolicy.h').is_file(),
+        'missing drivers/NativeVirtioBlock/VerifiedBlockPolicy.h')
+compile_source(staged / 'NativeUfs.cpp', obj,
+               extra=['-I', ROOT / 'kits/VerifiedRoot/include',
+                      '-I', ROOT / 'drivers/NativeVirtioBlock',
+                      '-DNATIVE_VERIFIED_BLOCK=1',
+                      '-DNATIVE_VERIFIED_BLOCK_MULTI_POLICY=1'])
 compiled, symbols = vtable(obj, '__ZTV14NativeUfsBlock')
 require(len(compiled) == len(methods), f'NativeUfsBlock has {len(compiled)} slots, base has {len(methods)}')
 for index, (actual, expected) in enumerate(zip(compiled, methods)):
@@ -272,7 +282,7 @@ report = dict(source_repository='https://github.com/ljhhkx529/NativeUFS-fuxi', s
               storage_vtable=hex(table), storage_metaclass=hex(metaclass),
               original_bindings={name: hex(value) for name, value in bindings.items()},
               archive_sha256=hashlib.sha256(archive.read_bytes()).hexdigest(),
-              source_storage_implementation_linked=False, verified_block_policy=False,
+              source_storage_implementation_linked=False, verified_block_policy=True,
               hardware_tested=False)
 (OUT / 'build-report.json').write_text(json.dumps(report, indent=2) + '\n')
 print(json.dumps(report, indent=2))

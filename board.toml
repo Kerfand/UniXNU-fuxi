@@ -85,6 +85,11 @@ archives = [
   # block.  Root publication remains disabled until this hardware checkpoint
   # proves the fuxi controller/SMMU hand-off and the flashed SHNGROOT manifest.
   "build-fuxi-ufs.py",
+  # Signed owner policy for the OS and SystemOS windows. The manifests are 65 MB of
+  # block hashes, so they are not in the repository: pre_build unpacks the release
+  # asset fuxi-root-policy into the device checkout as policy/. Regenerate them with
+  # scripts/build-fuxi-root-policy.py when the windows or the owner key change.
+  "build-fuxi-verified-root.py --os-manifest {tree}/policy/verified-root-os/manifest.bin --systemos-manifest {tree}/policy/verified-root-systemos/manifest.bin --trusted-key {tree}/keys/trusted-key.bin",
 # build-fuxi-stub.py defines, weakly, the native symbols the XNU patches reference even
 # when their feature is off. Without it the link stops on native_legacy_display_probe,
 # boot_progress_poll, the verified-root chain and mockfs.
