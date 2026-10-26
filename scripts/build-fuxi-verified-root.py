@@ -105,16 +105,16 @@ def main():
         require(size == 160 + 384 + blocks * 32, f'{name} manifest size does not match its header')
         print(f'{name}: manifest {size:,} B, image {image_bytes:,} B, {blocks:,} blocks')
 
+    # Anchor only. The manifests travel in the device tree (/chosen/
+    # verified-root-policy) because 65 MB of block hashes in __DATA_CONST pushed
+    # every later segment up by 62 MB and broke the panic screen cave, which sits
+    # at fixed addresses. The driver reads the bundle and authenticates it against
+    # this anchor, so keeping it out of the image loses nothing: the signature is
+    # what protects it, not the storage location.
     assembly = out / 'inputs.S'
     assembly.write_text(
-        '// Generated owner policy bundle. Signed by the board owner key, not by Apple.\n'
+        '// Generated owner trust anchor. Signed by the board owner key, not by Apple.\n'
         '.section __DATA_CONST,__const\n'
-        '.balign 8\n'
-        '.globl _verified_root_manifest, _verified_root_systemos_manifest\n'
-        '_verified_root_manifest:\n'
-        f'.incbin "{args.os_manifest.resolve()}"\n'
-        '_verified_root_systemos_manifest:\n'
-        f'.incbin "{args.systemos_manifest.resolve()}"\n'
         '.balign 8\n'
         '.globl _verified_root_key\n'
         '_verified_root_key:\n'
@@ -122,10 +122,9 @@ def main():
         '.balign 8\n'
         '.globl _verified_root_policies, _verified_root_policy_count\n'
         '_verified_root_policies:\n'
-        f'.quad _verified_root_manifest, {os_size}\n'
-        f'.quad _verified_root_systemos_manifest, {sys_size}\n'
+        '.quad 0, 0\n'
         '_verified_root_policy_count:\n'
-        '.quad 2\n')
+        '.quad 0\n')
     print(f'assembly: {assembly}')
 
     record = json.loads(RECORD.read_text().strip().rstrip(','))
@@ -166,7 +165,7 @@ def main():
                   systemos_manifest_sha256=hashlib.sha256(args.systemos_manifest.read_bytes()).hexdigest(),
                   systemos_manifest_bytes=sys_size,
                   trusted_key_sha256=hashlib.sha256(key).hexdigest(),
-                  policy_count=2, qemu_probe_linked=False, sample_blocks_linked=False,
+                  policy_count=0, bundle_in_device_tree=True, qemu_probe_linked=False, sample_blocks_linked=False,
                   archive_sha256=hashlib.sha256(archive.read_bytes()).hexdigest(),
                   archive_bytes=archive.stat().st_size, hardware_tested=False)
     (out / 'build-report.json').write_text(json.dumps(report, indent=2) + '\n')

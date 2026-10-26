@@ -188,13 +188,13 @@ size_mib = 192
 loader = "firmware"
 title = "FUXI FIX061 UFS READONLY"
 dram_size = "0x80000000"             # SMEM RAM table, SM8550 is shared with sheng
-panic_screen = false
-# The panic screen is injected into zero padding after the probe caves, and
-# patch-xnu-entry-probe.py rebases those addresses from the kernel symbol table.
-# The owner policy bundle adds 65 MB to __DATA_CONST, the rebased cave lands at
-# 0xfffffff00b269500 inside that data, and the payload step stops with
-# 'Padding at 0xfffffff00b269500 is not empty'. While the bundle is compiled in
-# a panic prints nothing; enable boot progress for a screen channel instead.
+panic_screen = true
+# The panic screen lives in the zero padding after the probe caves, at fixed
+# addresses that patch-xnu-entry-probe.py rebases from the kernel symbol table,
+# so it only works while the kernel image keeps its original size. The signed
+# policy bundle therefore travels in the device tree
+# (/chosen/verified-root-policy, scripts/make-vr-bundle.py) and the kernel links
+# the 395-byte anchor alone.
 # The original static/System trust caches of the same IPSW.
 trust_cache_sha256 = [
   "63e01c03b31e1532a5581a24865490673f0b5c297b0199fe0095637c6100ef4b",   # StaticTrustCache

@@ -77,6 +77,15 @@ def main():
                         help='Actual observed DRAM size, e.g. 0x230000000')
     parser.add_argument('--owned-memory-size', type=lambda value: int(value, 0), default=None,
                         help='Explicit DarwinBoot contiguous window request, 256 MiB..8 GiB in 2 MiB steps')
+    # Fork addition: the signed verified-root policy bundle travels in the device
+    # tree instead of the kernel image. 65 MB of block hashes in __DATA_CONST
+    # pushed every later segment up by 62 MB and broke the panic screen cave,
+    # which lives at fixed addresses. DarwinBoot already hands the ADT to the
+    # kernel, so a property is the only payload input that needs no firmware
+    # change (the trust cache path needs DarwinBoot to fill a memory-map slot).
+    parser.add_argument('--verified-root-bundle', type=Path, default=None,
+                        help='/chosen/verified-root-policy: signed policy bundle '
+                             'bytes, authenticated by the anchor linked into the kernel')
     parser.add_argument('--root-match-volume-uuid', default=None,
                         help='/chosen/root-matching: select the root by the UUID of an IOMedia (the standard source mechanism)')
     parser.add_argument('--unique-chip-id', type=lambda value: int(value, 16), default=None,
@@ -185,6 +194,8 @@ def main():
                         # off. This is software policy, not an Apple fuse claim.
                         *([('mix-n-match-prevention-status', struct.pack('<I', 0))]
                           if args.iphone_identity else []),
+                        *([('verified-root-policy', args.verified_root_bundle.read_bytes())]
+                          if args.verified_root_bundle else []),
                         *( [('root-matching', ('<dict><key>IOProviderClass</key><string>IOMedia</string>'
                                                '<key>IOPropertyMatch</key><dict><key>UUID</key><string>' +
                                                args.root_match_volume_uuid.upper() + '</string></dict></dict>\0').encode())]
