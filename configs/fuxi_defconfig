@@ -36,13 +36,16 @@ CONFIG_XNU_OWNER_DATA_VOLUME_UUID="18AB5557-DC2D-469B-8758-855E60F5B0DF"
 # NativePrelink also rebases functions which are not referenced by the XNU
 # link itself. Force-load the single-object archive so IORPCMessageFromMach
 # remains in the final candidate kernel for that later pass.
-CONFIG_XNU_EXTRA_LD_ARCHIVES="-Wl,-force_load,{tree}/build/fuxi-stub/libFuxiBringUpStub.a -Wl,-force_load,{tree}/build/verified-root-fuxi/libVerifiedRootProbe.a"
+CONFIG_XNU_EXTRA_LD_ARCHIVES="-Wl,-force_load,{tree}/build/fuxi-stub/libFuxiBringUpStub.a -Wl,-force_load,{tree}/.cache/fuxi-qud-build/libQcomXnuUsbDebug.a"
+# The verified-root provider is linked by build-xnu-4k-baseline.sh itself once
+# XNU_VERIFIED_ROOT_PROBE=1, so it must not also be force-loaded here.
+CONFIG_XNU_VERIFIED_ROOT_ARCHIVE="{tree}/build/verified-root-fuxi/libVerifiedRootProbe.a"
 # Bring-up: no virtio, no owner-trust chain, no boot progress. The archives that produce
 # them are not in board.toml, because they need the storage ABI audit evidence.
 CONFIG_XNU_NATIVE_VIRTIO_BLOCK=n
-CONFIG_XNU_OWNER_ROOT_AUDIT=n
-CONFIG_XNU_OWNER_ROOT_TRUST=n
-CONFIG_XNU_VERIFIED_ROOT_PROBE=n
+CONFIG_XNU_OWNER_ROOT_AUDIT=y
+CONFIG_XNU_OWNER_ROOT_TRUST=y
+CONFIG_XNU_VERIFIED_ROOT_PROBE=y
 # The GPU is the same Adreno 740 as the sheng board and the GMU windows are SoC level
 # addresses, so the qualified driver is reusable. ShengGmu.h ships in kits/sheng, and
 # the offline probe validates the firmware before the kernel can reach IOKit services.

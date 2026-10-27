@@ -93,6 +93,8 @@ archives = [
   # input that survives. Regenerate the manifests with
   # scripts/build-fuxi-root-policy.py when the windows or the owner key change.
   "build-fuxi-verified-root.py",
+  # QcomXnuUsbDebug: the CDC ACM log channel this board reads over USB.
+  "build-fuxi-usb-debug.py",
 # build-fuxi-stub.py defines, weakly, the native symbols the XNU patches reference even
 # when their feature is off. Without it the link stops on native_legacy_display_probe,
 # boot_progress_poll, the verified-root chain and mockfs.
@@ -222,6 +224,9 @@ kernel_args = [
   "sheng-pmgr=2",
   "native-ufs-probe=11",
   "native-ufs-diagnostics=1",
+  # USB CDC ACM kernel log; the receiver identifies VID/PID 1209:316d.
+  "qcom-usb-debug=1",
+  "-enable_kprintf_spam",
   "-apfs_shared_datavolume",
   "offline-key-events=1",
   "armcpu-diagnostics=1",

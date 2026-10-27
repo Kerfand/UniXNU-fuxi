@@ -215,6 +215,75 @@ text = text.replace('bool NativeUfsBlock::configureVerification ()\n', '#if defi
 assert text.count('  const uint8_t *manifest = nullptr;\n  uint64_t manifestBytes = 0;\n  if (!verified_root_policy_count || verified_root_policy_count > 16) {\n    gRootDiagnostic.stage = "policy count invalid";\n    return false;\n  }\n  for (uint64_t index = 0; index < verified_root_policy_count; ++index) {\n    const NativeVerifiedBlockPolicy &policy = verified_root_policies[index];\n    if (!policy.manifest || policy.manifestBytes < VR_HEADER_BYTES + VR_SIGNATURE_BYTES) {\n      gRootDiagnostic.stage = "policy envelope invalid";\n      return false;\n    }\n    uint64_t imageBytes = 0;\n    for (unsigned i = 0; i < 8; ++i) {\n      imageBytes |= static_cast<uint64_t> (policy.manifest[24 + i]) << (8 * i);\n    }\n    if (imageBytes != bytes) {\n      continue;\n    }\n    if (manifest) {\n      gRootDiagnostic.stage = "duplicate capacity-matching policy";\n      return false;\n    }\n    manifest = policy.manifest;\n    manifestBytes = policy.manifestBytes;\n  }\n') == 1, 'policy selection block missing'
 text = text.replace('  const uint8_t *manifest = nullptr;\n  uint64_t manifestBytes = 0;\n  if (!verified_root_policy_count || verified_root_policy_count > 16) {\n    gRootDiagnostic.stage = "policy count invalid";\n    return false;\n  }\n  for (uint64_t index = 0; index < verified_root_policy_count; ++index) {\n    const NativeVerifiedBlockPolicy &policy = verified_root_policies[index];\n    if (!policy.manifest || policy.manifestBytes < VR_HEADER_BYTES + VR_SIGNATURE_BYTES) {\n      gRootDiagnostic.stage = "policy envelope invalid";\n      return false;\n    }\n    uint64_t imageBytes = 0;\n    for (unsigned i = 0; i < 8; ++i) {\n      imageBytes |= static_cast<uint64_t> (policy.manifest[24 + i]) << (8 * i);\n    }\n    if (imageBytes != bytes) {\n      continue;\n    }\n    if (manifest) {\n      gRootDiagnostic.stage = "duplicate capacity-matching policy";\n      return false;\n    }\n    manifest = policy.manifest;\n    manifestBytes = policy.manifestBytes;\n  }\n', '  const uint8_t *manifest = nullptr;\n  uint64_t manifestBytes = 0;\n  if (adtBundleManifest (bytes, &manifest, &manifestBytes)) {\n    gRootDiagnostic.policyCount = 1;\n  } else {\n    // Fallback for kernels that still embed the manifests.\n    if (!verified_root_policy_count || verified_root_policy_count > 16) {\n      gRootDiagnostic.stage = "policy count invalid";\n      return false;\n    }\n    for (uint64_t index = 0; index < verified_root_policy_count; ++index) {\n      const NativeVerifiedBlockPolicy &policy = verified_root_policies[index];\n      if (!policy.manifest || policy.manifestBytes < VR_HEADER_BYTES + VR_SIGNATURE_BYTES) {\n        gRootDiagnostic.stage = "policy envelope invalid";\n        return false;\n      }\n      uint64_t imageBytes = 0;\n      for (unsigned i = 0; i < 8; ++i) {\n        imageBytes |= static_cast<uint64_t> (policy.manifest[24 + i]) << (8 * i);\n      }\n      if (imageBytes != bytes) {\n        continue;\n      }\n      if (manifest) {\n        gRootDiagnostic.stage = "duplicate capacity-matching policy";\n        return false;\n      }\n      manifest = policy.manifest;\n      manifestBytes = policy.manifestBytes;\n    }\n  }\n', 1)
 ufs_cpp.write_text(text)
+# Owner root trust: offline-owner-root-binding-audit.patch asks
+# native_verified_block_root_authorized() whether the device behind the mounted
+# root carries an authenticated signed volume, and skips the Apple root-hash panic
+# when it answers yes. The BSD device is the APFS volume, so its IOMedia carries the
+# volume UUID; walk up from there to the UFS window and let the driver decide.
+owner_source = """#if defined(NATIVE_VERIFIED_BLOCK) && NATIVE_VERIFIED_BLOCK
+extern "C" int native_verified_block_root_authorized (dev_t device);
+extern "C" int native_verified_block_root_authorized (dev_t device)
+{
+  if (device == NODEV) {
+    return 0;
+  }
+  OSDictionary *matching = IOService::serviceMatching ("IOMedia");
+  if (!matching) {
+    return 0;
+  }
+  OSIterator *services = IOService::getMatchingServices (matching);
+  int authorized = 0;
+  if (services) {
+    while (!authorized) {
+      IOService *media = OSDynamicCast (IOService, services->getNextObject ());
+      if (!media) {
+        break;
+      }
+      OSNumber *bsdMajor = OSDynamicCast (OSNumber, media->getProperty ("BSD Major"));
+      OSNumber *bsdMinor = OSDynamicCast (OSNumber, media->getProperty ("BSD Minor"));
+      if (!bsdMajor || !bsdMinor) {
+        continue;
+      }
+      if (bsdMajor->unsigned32BitValue () != major (device) ||
+          bsdMinor->unsigned32BitValue () != minor (device)) {
+        continue;
+      }
+      OSString *uuid = OSDynamicCast (OSString, media->getProperty ("UUID"));
+      if (!uuid || !uuid->getCStringNoCopy ()) {
+        continue;
+      }
+      IOService *node = media;
+      for (unsigned depth = 0; depth < 8 && node; ++depth) {
+        IOService *parent = node->getProvider ();
+        NativeUfsBlock *block = OSDynamicCast (NativeUfsBlock, parent);
+        if (block) {
+          authorized = block->authenticatesVolume (uuid->getCStringNoCopy ()) ? 1 : 0;
+          break;
+        }
+        node = parent;
+      }
+    }
+    services->release ();
+  }
+  matching->release ();
+  return authorized;
+}
+
+// offline-owner-root-crypto-probe.patch calls this when offline-owner-root-check=1.
+extern "C" void native_verified_root_probe (void);
+extern "C" void native_verified_root_probe (void)
+{
+  kprintf ("NATIVE_UFS owner root probe: policies=%llu anchor=%u\n",
+           verified_root_policy_count, (unsigned) sizeof (verified_root_key));
+}
+#endif
+
+"""
+owner_anchor = "bool NativeUfsBlock::start (IOService *provider)\n"
+assert text.count(owner_anchor) == 1, 'NativeUfs.cpp start anchor missing'
+text = text.replace(owner_anchor, owner_source + owner_anchor, 1)
+ufs_cpp.write_text(text)
+print('NativeUfs.cpp: owner root authorization added')
 print('NativeUfs.cpp: policy bundle read from /chosen')
 
 header = staged / 'SmmuTakeover.h'
