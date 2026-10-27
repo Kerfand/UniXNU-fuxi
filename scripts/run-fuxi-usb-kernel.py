@@ -58,4 +58,17 @@ text = text.replace(anchor, flags + anchor)
 out = root / '.cache/fuxi-usb-kernel-recipe.sh'
 out.parent.mkdir(parents=True, exist_ok=True)
 out.write_text(text)
-subprocess.run(['bash', str(out)], cwd=root, check=True)
+marker = root / '.cache/fuxi-usb-bootstrap'
+first_pass = not marker.exists()
+result = subprocess.run(['bash', str(out)], cwd=root)
+if first_pass:
+    # The driver runs this recipe twice. The first pass only has to produce the
+    # compile records, and it always stops at the kernel link because no archive
+    # step has run yet (libQcomXnuUsbDebug.a, the UFS kit, the stub). Tolerating
+    # that lets the driver reach those steps; the second invocation is the real
+    # link and keeps its exit status.
+    marker.parent.mkdir(parents=True, exist_ok=True)
+    marker.write_text(str(result.returncode) + '\n')
+    print('fuxi USB bootstrap pass finished with status %d; the final link runs after the archives' % result.returncode)
+    raise SystemExit(0)
+raise SystemExit(result.returncode)
