@@ -190,13 +190,11 @@ size_mib = 192
 loader = "firmware"
 title = "FUXI FIX061 UFS READONLY"
 dram_size = "0x80000000"             # SMEM RAM table, SM8550 is shared with sheng
-panic_screen = true
-# The panic screen lives in the zero padding after the probe caves, at fixed
-# addresses that patch-xnu-entry-probe.py rebases from the kernel symbol table,
-# so it only works while the kernel image keeps its original size. The signed
-# policy bundle therefore travels in the device tree
-# (/chosen/verified-root-policy, scripts/make-vr-bundle.py) and the kernel links
-# the 395-byte anchor alone.
+panic_screen = false
+# DarwinBoot caps the ADT sidecar at 16 MiB, so the 65 MB signed policy cannot ride
+# there; it is compiled into the kernel instead (117 MiB, under the 128 MiB kernel
+# limit). That moves the fixed padding patch-xnu-entry-probe.py injects the screen
+# into, so the screen is off and qcom-usb-debug=1 carries the diagnostics.
 # The original static/System trust caches of the same IPSW.
 trust_cache_sha256 = [
   "63e01c03b31e1532a5581a24865490673f0b5c297b0199fe0095637c6100ef4b",   # StaticTrustCache
