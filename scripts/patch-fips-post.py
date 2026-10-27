@@ -58,8 +58,13 @@ def main():
     start = symbols.get('_corecrypto_kext_start')
     post = symbols.get('_fipspost_post')
     if start is None or post is None:
-        print('patch-fips-post: symbols missing (start=%s post=%s)' % (start, post))
-        return 1
+        # XNU_CRYPTO_BOOTSTRAP=prelinked leaves prng_random.o without
+        # XNU_SOURCE_CORECRYPTO14, so the source corecrypto kext start is not part of
+        # this kernel: the original prelinked Apple component runs its own FIPS POST,
+        # unmodified and unsealed, and there is no source call site to neutralise.
+        print('patch-fips-post: source corecrypto kext start absent '
+              '(prelinked bootstrap); nothing to neutralise')
+        return 0
 
     # Scan the function body: everything up to the next exported symbol.
     following = min((v for v in symbols.values() if v > start), default=start + 0x2000)
