@@ -197,9 +197,14 @@ panic_screen = false
 # into, so the screen is off and qcom-usb-debug=1 carries the diagnostics.
 # The original static/System trust caches of the same IPSW.
 trust_cache_sha256 = [
-  "63e01c03b31e1532a5581a24865490673f0b5c297b0199fe0095637c6100ef4b",   # StaticTrustCache
-  "9cc478fe3525e2683b5b9ea1eea0851eaebebdab21d206556233400e59d2e361",   # Cryptex1,SystemTrustCache
+  "eb1475f643f45a974ebd40596f6e2b1cdf40205d2ca3c6094d774886099399c3",
 ]
+# The bundle above packs two caches from the iPhone10,3 16.7.16 (20H392) IPSW, built
+# by scripts/make-trust-cache-bundle.py: 087-86698-044.dmg.trustcache (StaticTrustCache,
+# sha256 63e01c03..., 2760 entries) and 087-86593-047.dmg.trustcache
+# (Cryptex1,SystemTrustCache, sha256 9cc478fe..., 61 entries). DarwinBoot reads the
+# bundle, ValidTrustCaches() checks it, and /chosen/memory-map/TrustCache receives the
+# address and size.
 kernel_args = [
   "-v",
   "serial=3",
