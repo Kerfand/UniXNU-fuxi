@@ -330,6 +330,175 @@ extern "C" int native_verified_block_volume_device (const char *uuid, dev_t *dev
   return found;
 }
 
+// Volatile Data volume for bring-up.
+//
+// iOS keeps /private/var on a separate Data volume, and launchd (through libxpc) exits as
+// soon as it is missing: "could not set up inheritance port", followed by the coredump
+// trying /private/var/cores and failing with ENOENT. On this port there is no writable
+// UFS window and NativeRamBlock needs the audited AES prelink closure, so the payload's
+// scratch-data.img - an APFS volume DarwinBoot copies into memory and reports through
+// /chosen/memory-map/RAMDisk - is published here as a writable block device instead.
+// Ram-backed means the contents do not survive a reboot; that is enough to find out what
+// launches after launchd gets a writable /private/var.
+class FuxiVolatileBlock : public IOBlockStorageDevice {
+  OSDeclareDefaultStructors (FuxiVolatileBlock)
+  uint8_t *storage = nullptr;
+  uint64_t byteCount = 0;
+  uint32_t unitBytes = 4096;
+  char volumeLabel[32] = {};
+  bool online = false;
+public:
+  bool configure (const char *name, uint8_t *bytes, uint64_t size, uint32_t unit);
+  bool start (IOService *provider) override;
+  IOReturn doEjectMedia () override { return kIOReturnUnsupported; }
+  IOReturn doFormatMedia (UInt64) override { return kIOReturnNotWritable; }
+  UInt32 doGetFormatCapacities (UInt64 *, UInt32) const override { return 0; }
+  char *getVendorString () override { return const_cast<char *> ("Fuxi"); }
+  char *getProductString () override { return volumeLabel; }
+  char *getRevisionString () override { return const_cast<char *> ("1.0"); }
+  char *getAdditionalDeviceInfoString () override { return const_cast<char *> ("volatile Data volume, writable, RAM backed"); }
+  IOReturn reportBlockSize (UInt64 *value) override { *value = unitBytes; return kIOReturnSuccess; }
+  IOReturn reportEjectability (bool *value) override { *value = false; return kIOReturnSuccess; }
+  IOReturn reportMaxValidBlock (UInt64 *value) override { *value = byteCount / unitBytes - 1; return kIOReturnSuccess; }
+  IOReturn reportMediaState (bool *present, bool *changed) override {
+    *present = online;
+    if (changed) *changed = false;
+    return kIOReturnSuccess;
+  }
+  IOReturn reportRemovability (bool *value) override { *value = false; return kIOReturnSuccess; }
+  IOReturn reportWriteProtection (bool *value) override { *value = false; return kIOReturnSuccess; }
+  IOReturn doSynchronizeCache () override { return online ? kIOReturnSuccess : kIOReturnNotReady; }
+  IOReturn doSynchronize (UInt64, UInt64, IOOptionBits) override { return doSynchronizeCache (); }
+  IOReturn getWriteCacheState (bool *value) override { *value = false; return kIOReturnSuccess; }
+  IOReturn setWriteCacheState (bool) override { return kIOReturnUnsupported; }
+  bool bsdNode (char *path, size_t pathSize) const;
+  IOReturn doAsyncReadWrite (IOMemoryDescriptor *, UInt64, UInt64, IOStorageAttributes *, IOStorageCompletion *) override;
+};
+OSDefineMetaClassAndStructors (FuxiVolatileBlock, IOBlockStorageDevice)
+
+// The published media and its BSD node appear asynchronously: IOBlockStorageDriver attaches
+// to the device and IOMediaBSDClient names the media afterwards.
+static IOService *gVolatileProvider = nullptr;
+
+bool FuxiVolatileBlock::configure (const char *name, uint8_t *bytes, uint64_t size, uint32_t unit)
+{
+  if (!name || !bytes || !size || !unit || (size % unit)) {
+    return false;
+  }
+  strlcpy (volumeLabel, name, sizeof (volumeLabel));
+  storage = bytes;
+  byteCount = size;
+  unitBytes = unit;
+  return true;
+}
+
+bool FuxiVolatileBlock::start (IOService *provider)
+{
+  if (!storage || !IOBlockStorageDevice::start (provider)) {
+    return false;
+  }
+  online = true;
+  registerService ();
+  return true;
+}
+
+bool FuxiVolatileBlock::bsdNode (char *path, size_t pathSize) const
+{
+  OSIterator *children = getChildIterator (gIOServicePlane);
+  bool found = false;
+  if (!children) {
+    return false;
+  }
+  while (!found) {
+    IOService *child = OSDynamicCast (IOService, children->getNextObject ());
+    if (!child) {
+      break;
+    }
+    OSString *name = OSDynamicCast (OSString, child->getProperty ("BSD Name"));
+    if (!name || !name->getCStringNoCopy ()) {
+      continue;
+    }
+    if (path && pathSize) {
+      snprintf (path, pathSize, "/dev/%s", name->getCStringNoCopy ());
+    }
+    found = true;
+  }
+  children->release ();
+  return found;
+}
+
+IOReturn FuxiVolatileBlock::doAsyncReadWrite (IOMemoryDescriptor *buffer, UInt64 block, UInt64 count,
+                                              IOStorageAttributes *, IOStorageCompletion *completion)
+{
+  IOReturn status;
+  IOByteCount done = 0;
+  if (!buffer || !completion || !completion->action || !count || !unitBytes || !online ||
+      block >= byteCount / unitBytes || count > byteCount / unitBytes - block ||
+      buffer->getLength () < count * unitBytes) {
+    return kIOReturnBadArgument;
+  }
+  uint8_t *target = storage + block * unitBytes;
+  IOByteCount length = static_cast<IOByteCount> (count * unitBytes);
+  // kIODirectionIn fills memory (a read from the volume); kIODirectionOut writes it.
+  if (buffer->getDirection () == kIODirectionIn) {
+    status = buffer->writeBytes (0, target, length);
+  } else if (buffer->getDirection () == kIODirectionOut) {
+    status = buffer->readBytes (0, target, length);
+  } else {
+    status = kIOReturnBadArgument;
+  }
+  if (status == kIOReturnSuccess) {
+    done = length;
+  }
+  completion->action (completion->target, completion->parameter, status, done);
+  return status;
+}
+
+// Publish the payload's scratch-data.img, if the device tree carries one, and report the
+// BSD path the mount can use. Returns 0 when there is nothing to publish.
+extern "C" int native_volatile_data_device (dev_t *device, char *path, size_t pathSize);
+extern "C" int native_volatile_data_device (dev_t *device, char *path, size_t pathSize)
+{
+  DTEntry mapEntry = nullptr;
+  void *value = nullptr;
+  UInt32 valueSize = 0;
+  uint64_t region = 0, regionBytes = 0;
+  if (!device || SecureDTLookupEntry (nullptr, "/chosen/memory-map", &mapEntry) != kSuccess || !mapEntry ||
+      SecureDTGetProperty (mapEntry, "RAMDisk", &value, &valueSize) != kSuccess ||
+      !value || valueSize != 16) {
+    return 0;
+  }
+  memcpy (&region, value, sizeof (region));
+  memcpy (&regionBytes, static_cast<const uint8_t *> (value) + 8, sizeof (regionBytes));
+  kprintf ("NATIVE_OWNER data: ramdisk region=0x%llx bytes=%llu\n",
+           (unsigned long long)region, (unsigned long long)regionBytes);
+  if (!region || regionBytes < 4096) {
+    return 0;
+  }
+  IOService *provider = gVolatileProvider;
+  if (!provider) {
+    kprintf ("NATIVE_OWNER data: the UFS controller never published a provider\n");
+    return 0;
+  }
+  FuxiVolatileBlock *volatile_block = OSTypeAlloc (FuxiVolatileBlock);
+  if (!volatile_block || !volatile_block->init (nullptr) ||
+      !volatile_block->configure ("DataVolatile", reinterpret_cast<uint8_t *> (region), regionBytes, 4096) ||
+      !volatile_block->attach (provider) || !volatile_block->start (provider)) {
+    kprintf ("NATIVE_OWNER data: volatile device publish failed\n");
+    return 0;
+  }
+  for (unsigned attempt = 0; attempt < 500; ++attempt) {
+    if (volatile_block->bsdNode (path, pathSize)) {
+      *device = makedev (0, 0);
+      kprintf ("NATIVE_OWNER data: volatile media at %s\n", path);
+      return 1;
+    }
+    IOSleep (10);
+  }
+  kprintf ("NATIVE_OWNER data: volatile media never appeared\n");
+  return 0;
+}
+
 // offline-owner-root-crypto-probe.patch calls this when offline-owner-root-check=1.
 extern "C" void native_verified_root_probe (void);
 extern "C" void native_verified_root_probe (void)
@@ -343,6 +512,11 @@ extern "C" void native_verified_root_probe (void)
 owner_anchor = "bool NativeUfsBlock::start (IOService *provider)\n"
 assert text.count(owner_anchor) == 1, 'NativeUfs.cpp start anchor missing'
 text = text.replace(owner_anchor, owner_source + owner_anchor, 1)
+ufs_cpp.write_text(text)
+
+provider_anchor = '  if (!IOService::start (provider)) {\n'
+assert text.count(provider_anchor) == 1, 'NativeUfs.cpp provider anchor missing'
+text = text.replace(provider_anchor, '  gVolatileProvider = provider;\n' + provider_anchor, 1)
 ufs_cpp.write_text(text)
 print('NativeUfs.cpp: owner root authorization added')
 print('NativeUfs.cpp: policy bundle read from /chosen')
