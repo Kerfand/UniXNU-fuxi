@@ -67,8 +67,16 @@ if first_pass:
     # step has run yet (libQcomXnuUsbDebug.a, the UFS kit, the stub). Tolerating
     # that lets the driver reach those steps; the second invocation is the real
     # link and keeps its exit status.
+    records = sorted(root.glob('build/xnu/**/link.filelist'))
+    if not records:
+        # A broken patch or a compile error fails here too, and the tail of the log is
+        # then just the usual link failure. Without this check the driver carried on to
+        # the archives and corecrypto stopped at 'No XNU symbol names'.
+        print('fuxi USB bootstrap pass produced no compile records: the recipe failed before the link')
+        raise SystemExit(result.returncode or 1)
     marker.parent.mkdir(parents=True, exist_ok=True)
     marker.write_text(str(result.returncode) + '\n')
-    print('fuxi USB bootstrap pass finished with status %d; the final link runs after the archives' % result.returncode)
+    print('fuxi USB bootstrap pass wrote %d compile record file(s) and stopped with status %d; the final link runs after the archives'
+          % (len(records), result.returncode))
     raise SystemExit(0)
 raise SystemExit(result.returncode)
