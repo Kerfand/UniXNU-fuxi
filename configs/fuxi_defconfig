@@ -63,3 +63,18 @@ CONFIG_XNU_NATIVE_MOBILE_DISPLAY=n
 CONFIG_XNU_ARMVIRT_PLATFORM=n
 # The boot-progress archive requires NativeUfs and its qualification evidence.
 CONFIG_XNU_BOOT_PROGRESS=n
+
+# The boot now reaches launchd: the trust caches load, AMFI accepts the adhoc
+# signatures and dyld runs libignition. It stops at
+#   shared_region: [1(launchd)] vm_shared_region_start_address() failed
+# because the dyld shared cache lives in the SystemOS cryptex. Owner union
+# composition mounts that cryptex over /System/Cryptexes/OS. CACHE_MOUNT requires
+# OWNER_ROOT_TRUST (on), CACHE_STARTUP requires CACHE_MOUNT, and UNION_SYSTEMOS
+# requires CACHE_STARTUP with CRYPTEX_FILES=0. No scratch Data volume is needed:
+# XNU_OWNER_DATA_VOLUME_UUID is only read when DATA_MOUNT and NATIVE_RAM_BLOCK are 1.
+CONFIG_XNU_OWNER_CACHE_MOUNT=y
+CONFIG_XNU_OWNER_CACHE_STARTUP=y
+CONFIG_XNU_OWNER_UNION_SYSTEMOS=y
+# The cache carrier is the SystemOS cryptex volume of this image. The recipe defaults
+# to sheng's 8846FE78-2910-4297-AF97-D59BB6F8FC16, which is not in our signed policy.
+CONFIG_XNU_OWNER_CACHE_VOLUME_UUID="96096B28-B6DC-4BC7-9D3A-2632A0FE53F1"
