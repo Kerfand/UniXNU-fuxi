@@ -269,6 +269,63 @@ extern "C" int native_verified_block_root_authorized (dev_t device)
   return authorized;
 }
 
+// offline-owner-systemos-mount.patch and offline-owner-cache-carrier.patch resolve a
+// volume by its signed UUID before mounting the SystemOS cryptex or the cache carrier.
+// Answer exactly like the authorization hook: the media must carry that UUID and the
+// UFS window behind it must authenticate it against the signed policy.
+extern "C" int native_verified_block_volume_device (const char *uuid, dev_t *device,
+                                                    char *path, size_t pathSize);
+extern "C" int native_verified_block_volume_device (const char *uuid, dev_t *device,
+                                                    char *path, size_t pathSize)
+{
+  if (!uuid || !device) {
+    return 0;
+  }
+  OSDictionary *matching = IOService::serviceMatching ("IOMedia");
+  if (!matching) {
+    return 0;
+  }
+  OSIterator *services = IOService::getMatchingServices (matching);
+  int found = 0;
+  if (services) {
+    while (!found) {
+      IOService *media = OSDynamicCast (IOService, services->getNextObject ());
+      if (!media) {
+        break;
+      }
+      OSString *mediaUuid = OSDynamicCast (OSString, media->getProperty ("UUID"));
+      if (!mediaUuid || !mediaUuid->getCStringNoCopy () || strcmp (mediaUuid->getCStringNoCopy (), uuid)) {
+        continue;
+      }
+      OSNumber *bsdMajor = OSDynamicCast (OSNumber, media->getProperty ("BSD Major"));
+      OSNumber *bsdMinor = OSDynamicCast (OSNumber, media->getProperty ("BSD Minor"));
+      OSString *bsdName = OSDynamicCast (OSString, media->getProperty ("BSD Name"));
+      if (!bsdMajor || !bsdMinor || !bsdName || !bsdName->getCStringNoCopy ()) {
+        continue;
+      }
+      IOService *node = media;
+      for (unsigned depth = 0; depth < 8 && node; ++depth) {
+        IOService *parent = node->getProvider ();
+        NativeUfsBlock *block = OSDynamicCast (NativeUfsBlock, parent);
+        if (block) {
+          if (block->authenticatesVolume (uuid)) {
+            *device = makedev (bsdMajor->unsigned32BitValue (), bsdMinor->unsigned32BitValue ());
+            if (path && pathSize) {
+              strlcpy (path, bsdName->getCStringNoCopy (), pathSize);
+            }
+            found = 1;
+          }
+          break;
+        }
+        node = parent;
+      }
+    }
+    services->release ();
+  }
+  matching->release ();
+  return found;
+}
+
 // offline-owner-root-crypto-probe.patch calls this when offline-owner-root-check=1.
 extern "C" void native_verified_root_probe (void);
 extern "C" void native_verified_root_probe (void)
