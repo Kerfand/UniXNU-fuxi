@@ -336,7 +336,12 @@ compile_source(staged / 'NativeUfs.cpp', obj,
                extra=['-I', ROOT / 'kits/VerifiedRoot/include',
                       '-I', ROOT / 'drivers/NativeVirtioBlock',
                       '-DNATIVE_VERIFIED_BLOCK=1',
-                      '-DNATIVE_VERIFIED_BLOCK_MULTI_POLICY=1'])
+                      '-DNATIVE_VERIFIED_BLOCK_MULTI_POLICY=1',
+                      # Pinned third-party code that only compiles once
+                      # NATIVE_VERIFIED_BLOCK is on: the record's -Werror turns its
+                      # pre-existing sign warnings into failures. Keep them out of
+                      # this translation unit instead of editing the submodule.
+                      '-Wno-sign-compare', '-Wno-sign-conversion'])
 compiled, symbols = vtable(obj, '__ZTV14NativeUfsBlock')
 require(len(compiled) == len(methods), f'NativeUfsBlock has {len(compiled)} slots, base has {len(methods)}')
 for index, (actual, expected) in enumerate(zip(compiled, methods)):
