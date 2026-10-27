@@ -311,7 +311,11 @@ extern "C" int native_verified_block_volume_device (const char *uuid, dev_t *dev
           if (block->authenticatesVolume (uuid)) {
             *device = makedev (bsdMajor->unsigned32BitValue (), bsdMinor->unsigned32BitValue ());
             if (path && pathSize) {
-              strlcpy (path, bsdName->getCStringNoCopy (), pathSize);
+              // native_owner_cache_prepare() hands this string to mount() as the device
+              // to mount, and mount() resolves it as a path, so it needs the /dev/ prefix
+              // the BSD client publishes. Without it mount() returns ENOENT (2) and the
+              // owner SystemOS mount panics.
+              snprintf (path, pathSize, "/dev/%s", bsdName->getCStringNoCopy ());
             }
             found = 1;
           }
