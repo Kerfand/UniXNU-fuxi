@@ -253,7 +253,10 @@ chip_id = "207"
 owned_memory_size = "0x130000000"
 root_match_volume_uuid = "DADD93F8-DBBF-4B17-A1DF-0F11E64172F7"
 cpu_regs = "0,0x100,0x200,0x300,0x400,0x500,0x600,0x700"
-packed_data_ramdisk = true
+# The Data seed is a dense 64 MiB APFS image (mkapfs, 16384 blocks of 4096) rather than the
+# packed sparse format, because FuxiVolatileBlock serves it straight out of the memory
+# DarwinBoot reserves for the ramdisk and needs no unpacker.
+packed_data_ramdisk = false
 # The kernel is built for an iPhone X; without this MobileGestalt sees an iPad
 # and the UI lays out for a tablet.
 iphone_identity = true
