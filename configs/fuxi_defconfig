@@ -31,7 +31,10 @@ CONFIG_XNU_SOURCE_CORECRYPTO14=y
 CONFIG_XNU_NATIVE_AES=n
 # Requires NATIVE_AES in build-xnu-4k-baseline.sh, and it is only a root device.
 CONFIG_XNU_NATIVE_RAM_BLOCK=n
-CONFIG_XNU_CRYPTO_BOOTSTRAP="source"
+# The owner crypto probe requires the prelinked bootstrap mode: prng_random.o
+# then leaves XNU_SOURCE_CORECRYPTO14 undefined and the original prelinked Apple
+# crypto component supplies it, which is what sheng_defconfig does.
+CONFIG_XNU_CRYPTO_BOOTSTRAP="prelinked"
 CONFIG_XNU_OWNER_DATA_VOLUME_UUID="18AB5557-DC2D-469B-8758-855E60F5B0DF"
 # NativePrelink also rebases functions which are not referenced by the XNU
 # link itself. Force-load the single-object archive so IORPCMessageFromMach
