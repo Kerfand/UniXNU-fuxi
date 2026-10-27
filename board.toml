@@ -220,7 +220,7 @@ kernel_args = [
   "offline-apfs-load=1",
   "boot-progress=2",
   "sheng-pmgr=2",
-  "native-ufs-probe=11",
+  "native-ufs-root=1",
   "native-ufs-diagnostics=1",
   # USB CDC ACM kernel log; the receiver identifies VID/PID 1209:316d.
   "qcom-usb-debug=1",
