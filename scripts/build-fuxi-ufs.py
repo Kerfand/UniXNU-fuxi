@@ -220,7 +220,7 @@ ufs_cpp.write_text(text)
 # root carries an authenticated signed volume, and skips the Apple root-hash panic
 # when it answers yes. The BSD device is the APFS volume, so its IOMedia carries the
 # volume UUID; walk up from there to the UFS window and let the driver decide.
-owner_source = """#if defined(NATIVE_VERIFIED_BLOCK) && NATIVE_VERIFIED_BLOCK
+owner_source = r"""#if defined(NATIVE_VERIFIED_BLOCK) && NATIVE_VERIFIED_BLOCK
 extern "C" int native_verified_block_root_authorized (dev_t device);
 extern "C" int native_verified_block_root_authorized (dev_t device)
 {
@@ -274,7 +274,7 @@ extern "C" void native_verified_root_probe (void);
 extern "C" void native_verified_root_probe (void)
 {
   kprintf ("NATIVE_UFS owner root probe: policies=%llu anchor=%u\n",
-           verified_root_policy_count, (unsigned) sizeof (verified_root_key));
+           verified_root_policy_count, (unsigned) VR_KEY_BYTES);
 }
 #endif
 
