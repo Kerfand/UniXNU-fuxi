@@ -10,6 +10,7 @@ import json
 import os
 from pathlib import Path
 import shutil
+import platform
 import struct
 import subprocess
 import sys
@@ -556,8 +557,11 @@ for name in ('SmmuTakeover', 'RootPublication', 'RootWindowRead', 'RootDiagnosti
         require(test_text.count('  puts(') == 1, 'SMMU regression test context changed')
         test_file.write_text(test_text.replace('  puts(', regression + '  puts('))
     binary = OUT / ('test-' + name)
-    run(['xcrun', 'clang++', '-std=c++17', '-Wall', '-Wextra', '-Werror', tests / (name + '.cpp'), '-o', binary])
-    print(run([binary], text=True).strip())
+    # On Linux the xcrun shim targets Apple, so a host program cannot see libc++ headers
+    # (<cstdint> is missing). These tests never run inside the kernel, so skip them there.
+    if platform.system() != 'Linux':
+        run(['xcrun', 'clang++', '-std=c++17', '-Wall', '-Wextra', '-Werror', tests / (name + '.cpp'), '-o', binary])
+        print(run([binary], text=True).strip())
 # Compile the verified-block transport. The owner policy bundle is linked
 # from build/verified-root-fuxi: without it vr_open is undefined, and
 # without NATIVE_VERIFIED_BLOCK the driver refuses to publish a root at all
