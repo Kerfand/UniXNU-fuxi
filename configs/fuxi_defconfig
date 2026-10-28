@@ -28,9 +28,10 @@ CONFIG_XNU_SOURCE_CORECRYPTO14=y
 # kernelcache ran against this build's digest tables.
 # The hardware AES accelerator requires the prelinked crypto closure, which is
 # the mode that crashed. Bring-up runs without it.
-CONFIG_XNU_NATIVE_AES=n
+CONFIG_XNU_NATIVE_AES=y
+CONFIG_XNU_NATIVE_AES_ARCHIVE="{tree}/build/native-aes/libSoftwareAES.a"
 # Requires NATIVE_AES in build-xnu-4k-baseline.sh, and it is only a root device.
-CONFIG_XNU_NATIVE_RAM_BLOCK=n
+CONFIG_XNU_NATIVE_RAM_BLOCK=y
 # The owner crypto probe requires the prelinked bootstrap mode: prng_random.o
 # then leaves XNU_SOURCE_CORECRYPTO14 undefined and the original prelinked Apple
 # crypto component supplies it, which is what sheng_defconfig does.

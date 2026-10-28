@@ -84,6 +84,9 @@ archives = [
   # LUN 0, validates the GPT, finds the userdata entry and inspects its first
   # block.  Root publication remains disabled until this hardware checkpoint
   # proves the fuxi controller/SMMU hand-off and the flashed SHNGROOT manifest.
+  "build-arm-driver.py NativeAES",
+  "build-software-aes-bindings.py --objects-dir build/native-aes",
+  "build-arm-driver.py NativeRamBlock",
   "build-fuxi-ufs.py",
   # Signed owner policy for the OS and SystemOS windows. The manifests are 65 MB of
   # block hashes, so they are not in the repository: pre_build downloads the release
