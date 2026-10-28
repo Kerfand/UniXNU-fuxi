@@ -9,7 +9,10 @@ import subprocess
 import sys
 
 ROOT = Path(__file__).resolve().parents[1]
-sys.path.insert(0, str(ROOT / 'kits/XnuPrelink'))
+for _kit in ('kits/XnuPrelink', 'kits/NativePrelink'):
+    if (ROOT / _kit).is_dir():
+        sys.path.insert(0, str(ROOT / _kit))
+        break
 import native_prelink as np
 
 parser = argparse.ArgumentParser(description=__doc__)
