@@ -21,7 +21,10 @@ prepare = '''python3 "$ROOT/scripts/prepare-fuxi-usb-debug.py" \
 QUD_MODULE="$ROOT/.cache/fuxi-qud-module"
 QUD_PATCHER="$QUD_MODULE/scripts/xnu_patches.py"
 QUD_STATE=$(python3 "$QUD_PATCHER" status --xnu "$ROOT/.cache/xnu-work" --profile darwin23-fuxi)
-if [[ "$QUD_STATE" == *'"state_before": "applied"'* ]]; then
+# Only when the tree is still unpatched: after the framework series is in place, reversing
+# here would move bsd_init.c away from the context the owner patches were applied against.
+if [[ "$QUD_STATE" == *'"state_before": "applied"'* ]] && \
+   ! grep -q native_owner_cache_prepare "$ROOT/.cache/xnu-work/bsd/kern/kern_exec.c" 2>/dev/null; then
   python3 "$QUD_PATCHER" reverse --xnu "$ROOT/.cache/xnu-work" --profile darwin23-fuxi
 fi
 '''
@@ -29,8 +32,11 @@ if text.count(anchor) != 1:
     raise SystemExit('kernel patch preparation anchor changed')
 text = text.replace(anchor, prepare + '\n' + anchor)
 anchor = 'export XNU_AVAILABILITY_PL=$ROOT/.cache/fakeroot/usr/local/libexec/availability.pl'
-apply = '''python3 "$QUD_PATCHER" check --xnu "$ROOT/.cache/xnu-work" --profile darwin23-fuxi
-python3 "$QUD_PATCHER" apply --xnu "$ROOT/.cache/xnu-work" --profile darwin23-fuxi
+apply = '''QUD_STATE2=$(python3 "$QUD_PATCHER" status --xnu "$ROOT/.cache/xnu-work" --profile darwin23-fuxi)
+if [[ "$QUD_STATE2" == *'"state_before": "ready"'* ]]; then
+  python3 "$QUD_PATCHER" check --xnu "$ROOT/.cache/xnu-work" --profile darwin23-fuxi
+  python3 "$QUD_PATCHER" apply --xnu "$ROOT/.cache/xnu-work" --profile darwin23-fuxi
+fi
 '''
 if text.count(anchor) != 1:
     raise SystemExit('kernel patch completion anchor changed')

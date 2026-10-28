@@ -461,7 +461,7 @@ extern "C" int native_volatile_data_device (dev_t *device, char *path, size_t pa
 extern "C" int native_volatile_data_device (dev_t *device, char *path, size_t pathSize)
 {
   DTEntry mapEntry = nullptr;
-  void *value = nullptr;
+  const void *value = nullptr;
   UInt32 valueSize = 0;
   uint64_t region = 0, regionBytes = 0;
   if (!device || SecureDTLookupEntry (nullptr, "/chosen/memory-map", &mapEntry) != kSuccess || !mapEntry ||
