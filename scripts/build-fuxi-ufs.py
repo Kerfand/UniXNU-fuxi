@@ -471,8 +471,12 @@ extern "C" int native_volatile_data_device (dev_t *device, char *path, size_t pa
   }
   memcpy (&region, value, sizeof (region));
   memcpy (&regionBytes, static_cast<const uint8_t *> (value) + 8, sizeof (regionBytes));
-  kprintf ("NATIVE_OWNER data: ramdisk region=0x%llx bytes=%llu\n",
-           (unsigned long long)region, (unsigned long long)regionBytes);
+  // The memory map reports physical addresses, as /chosen/memory-map/TrustCache does; the
+  // kernel's virtual window comes from phystokv (osfmk/arm64/sptm/arm_init_sptm.c:1269).
+  uint8_t *volatileBytes = reinterpret_cast<uint8_t *> (phystokv (region));
+  kprintf ("NATIVE_OWNER data: ramdisk phys=0x%llx virt=0x%llx bytes=%llu\n",
+           (unsigned long long)region, (unsigned long long)(uintptr_t)volatileBytes,
+           (unsigned long long)regionBytes);
   if (!region || regionBytes < 4096) {
     return 0;
   }
@@ -483,7 +487,7 @@ extern "C" int native_volatile_data_device (dev_t *device, char *path, size_t pa
   }
   FuxiVolatileBlock *volatile_block = OSTypeAlloc (FuxiVolatileBlock);
   if (!volatile_block || !volatile_block->init (nullptr) ||
-      !volatile_block->configure ("DataVolatile", reinterpret_cast<uint8_t *> (region), regionBytes, 4096) ||
+      !volatile_block->configure ("DataVolatile", volatileBytes, regionBytes, 4096) ||
       !volatile_block->attach (provider) || !volatile_block->start (provider)) {
     kprintf ("NATIVE_OWNER data: volatile device publish failed\n");
     return 0;
