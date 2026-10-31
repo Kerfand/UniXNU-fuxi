@@ -1,6 +1,7 @@
 #!/usr/bin/env python3
 """Compile the verified-block manifest entry point into an archive the kernel link force-loads."""
 import json
+import os
 import subprocess
 import sys
 from pathlib import Path
@@ -42,6 +43,6 @@ if result.returncode:
 
 archive = OUT / "libVerifiedBlockManifest.a"
 archive.unlink(missing_ok=True)
-subprocess.run(["/home/xiaomi/unixnu-linux/CommandLineTools/usr/bin/ar", "rcs", archive,
+subprocess.run([(os.environ.get('UNIXNU_AR') or ('/home/xiaomi/unixnu-linux/CommandLineTools/usr/bin/ar' if os.path.exists('/home/xiaomi/unixnu-linux/CommandLineTools/usr/bin/ar') else 'ar')), "rcs", archive,
                 str(OUT / "VerifiedBlockManifest.o")], check=True)
 print("verified manifest archive:", archive, archive.stat().st_size, "bytes")

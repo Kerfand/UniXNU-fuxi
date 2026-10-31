@@ -4,6 +4,7 @@ import argparse
 import json
 from pathlib import Path
 import struct
+import os
 import subprocess
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -113,5 +114,5 @@ if deployment != (2, 0x110000):
     raise SystemExit(f'Unexpected platform deployment {deployment}')
 archive = out / ('lib' + component + '.a')
 archive.unlink(missing_ok=True)
-subprocess.run(['/home/xiaomi/unixnu-linux/CommandLineTools/usr/bin/ar', 'rcs', archive, destination], check=True)  # cctools ar: host xcrun resolves to GNU ar, whose archives Apple ld rejects
+subprocess.run([(os.environ.get('UNIXNU_AR') or ('/home/xiaomi/unixnu-linux/CommandLineTools/usr/bin/ar' if os.path.exists('/home/xiaomi/unixnu-linux/CommandLineTools/usr/bin/ar') else 'ar')), 'rcs', archive, destination], check=True)  # cctools ar: host xcrun resolves to GNU ar, whose archives Apple ld rejects
 print(f'{component}: -Werror build and actual ARM64/iOS 17 object audit passed')

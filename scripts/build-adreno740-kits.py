@@ -71,7 +71,7 @@ subprocess.run(['xcrun', 'clang', '-target', 'arm64-apple-ios17.0', '-Wno-incomp
                 '-o', out / 'firmware.o'], check=True)
 objects.append(out / 'firmware.o')
 archive = out / 'libAdreno740.a'
-subprocess.run(['/home/xiaomi/unixnu-linux/CommandLineTools/usr/bin/ar', 'rcs', archive, *objects], check=True)  # cctools ar: host xcrun resolves to GNU ar, whose archives ld rejects
+subprocess.run([(os.environ.get('UNIXNU_AR') or ('/home/xiaomi/unixnu-linux/CommandLineTools/usr/bin/ar' if os.path.exists('/home/xiaomi/unixnu-linux/CommandLineTools/usr/bin/ar') else 'ar')), 'rcs', archive, *objects], check=True)  # cctools ar: host xcrun resolves to GNU ar, whose archives ld rejects
 defined = subprocess.run(['/usr/lib/llvm-21/bin/llvm-nm', '-g', archive], capture_output=True, text=True).stdout  # GNU nm cannot read a Mach-O archive
 missing = [s for s in ('_ShengGmuColdStart', '_ShengGmuBuildStartup',
                        '_ShengGmuCommandDbInputs', '_AdrenoFirmwarePlanGmu',

@@ -6,6 +6,7 @@ the display stack that build-boot-progress.py requires. The archive is force-loa
 link, and kern_exec.c calls sheng_boot_watchdog_policy() unconditionally before launchd runs.
 """
 import json
+import os
 import subprocess
 from pathlib import Path
 
@@ -45,6 +46,6 @@ if result.returncode:
 
 archive = OUT / "libWatchdogPolicy.a"
 archive.unlink(missing_ok=True)
-subprocess.run(["/home/xiaomi/unixnu-linux/CommandLineTools/usr/bin/ar", "rcs", archive,
+subprocess.run([(os.environ.get('UNIXNU_AR') or ('/home/xiaomi/unixnu-linux/CommandLineTools/usr/bin/ar' if os.path.exists('/home/xiaomi/unixnu-linux/CommandLineTools/usr/bin/ar') else 'ar')), "rcs", archive,
                 str(OUT / "BootWatchdogPolicy.o")], check=True)
 print(f"watchdog policy archive: {archive} ({archive.stat().st_size} B)")
