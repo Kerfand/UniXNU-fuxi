@@ -646,6 +646,10 @@ asm = OUT / 'original-bindings.S'
 asm.write_text(''.join(f'.globl {name}\n.set {name}, {address:#x}\n' for name, address in bindings.items()))
 run(['xcrun', 'clang', '-target', 'arm64-apple-ios17.0', '-c', asm, '-o', OUT / 'original-bindings.o'])
 archive = OUT / 'libNativeUfs.a'
+# build-xnu-4k-baseline.sh looks for build/sheng-ufs/libShengUfs.a, so keep both
+# spellings pointing at the same archive.
+_sheng_ufs = ROOT / 'build/sheng-ufs'
+
 archive.unlink(missing_ok=True)
 run(['xcrun', 'ar', 'rcs', archive, obj, OUT / 'original-bindings.o'])
 report = dict(source_repository='https://github.com/ljhhkx529/NativeUFS-fuxi', source_commit=SOURCE_COMMIT,
@@ -661,3 +665,6 @@ report = dict(source_repository='https://github.com/ljhhkx529/NativeUFS-fuxi', s
 (OUT / 'build-report.json').write_text(json.dumps(report, indent=2) + '\n')
 print(json.dumps(report, indent=2))
 print('PASS: pinned NativeUFS-fuxi build, concrete storage slots and original Apple storage bindings')
+
+_sheng_ufs.mkdir(parents=True, exist_ok=True)
+shutil.copyfile(archive, _sheng_ufs / 'libShengUfs.a')
