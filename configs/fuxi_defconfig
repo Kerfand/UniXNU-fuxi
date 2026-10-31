@@ -10,7 +10,7 @@ CONFIG_XNU_ARMCPU=y
 # Use the prelinked Apple IOStorageFamily as the only storage-class provider.
 # NativeUfs subclasses those existing classes; it does not link a second copy
 # of IOStorageFamily.  FIX061 enables its read-only probe but not root mode.
-CONFIG_XNU_NATIVE_UFS=y
+CONFIG_XNU_NATIVE_UFS=n
 CONFIG_XNU_TRUST_CACHE_RUNTIME=y
 # Source mockfs remains available for bring-up; FIX061 only qualifies native
 # UFS transport/GPT/manifest access and deliberately does not publish a root.
@@ -49,7 +49,7 @@ CONFIG_XNU_VERIFIED_ROOT_ARCHIVE="{tree}/build/verified-root-fuxi/libVerifiedRoo
 CONFIG_XNU_NATIVE_VIRTIO_BLOCK=y
 CONFIG_XNU_OWNER_ROOT_AUDIT=y
 CONFIG_XNU_OWNER_ROOT_TRUST=y
-CONFIG_XNU_VERIFIED_ROOT_PROBE=y
+CONFIG_XNU_VERIFIED_ROOT_PROBE=n
 # The GPU is the same Adreno 740 as the sheng board and the GMU windows are SoC level
 # addresses, so the qualified driver is reusable. ShengGmu.h ships in kits/sheng, and
 # the offline probe validates the firmware before the kernel can reach IOKit services.
