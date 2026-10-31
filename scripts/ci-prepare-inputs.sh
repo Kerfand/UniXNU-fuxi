@@ -18,13 +18,15 @@
 # them.
 set -euo pipefail
 
-repository="${GITHUB_REPOSITORY:?GITHUB_REPOSITORY is required}"
+repository="${FUXI_RELEASE_REPO:-Kerfand/UniXNU-fuxi}"
 work="${RUNNER_TEMP:?RUNNER_TEMP is required}"
 
 mkdir -p "$work/fuxi-inputs"
 cd "$work/fuxi-inputs"
 
-export GH_TOKEN="${GITHUB_TOKEN:?GITHUB_TOKEN is required}"
+# The assets live in the device repository, which is public; a workflow token
+# from the framework fork can read public release assets.
+if [ -n "${GITHUB_TOKEN:-}" ]; then export GH_TOKEN="$GITHUB_TOKEN"; fi
 
 echo "== downloading the pinned reference kernel"
 gh release download fuxi-pmgr-baseline -R "$repository" -p kernel.macho -D . --clobber
