@@ -194,6 +194,27 @@ require(page & 0x9f00001f == 0x90000000 and add & 0xffc003ff == 0x91000000 and r
         'Unexpected storage metaclass getter')
 metaclass = adrp(pointers[7], page) + (add >> 10 & 4095)
 
+# Other concrete block transports share this exact retained Apple class.
+# Publish static ABI evidence, without claiming a live-device I/O qualification.
+static_bindings = {name: pointers[index] for index, name in enumerate(methods)
+                   if name not in by_name and name != '___cxa_pure_virtual'}
+static_bindings.update({
+    '__ZN20IOBlockStorageDeviceC2EPK11OSMetaClass': constructors[0][0],
+    '__ZN20IOBlockStorageDeviceD2Ev': destructor,
+    '__ZN20IOBlockStorageDevice10gMetaClassE': metaclass,
+    '__ZTV20IOBlockStorageDevice': table})
+(OUT / 'storage-static-abi.json').write_text(json.dumps({
+    'schema': 'fuxi-ios16-storage-static-abi-v1',
+    'reference_sha256': REFERENCE_SHA,
+    'annotation_sha256': hashlib.sha256(annotation.read_bytes()).hexdigest(),
+    'method_slots': len(methods), 'inherited_slots_checked': len(known),
+    'abstract_complete_destructors_trap': True,
+    'hardware_tested': False,
+    'methods': [{'slot': index, 'name': name, 'target': hex(pointers[index])}
+                for index, name in enumerate(methods)],
+    'bindings': {name: hex(value) for name, value in static_bindings.items()},
+}, indent=2) + '\n')
+
 # Stage the user-selected driver. Refuse a shared context bank or a wildcard
 # mapping overlapping the exact UFS stream before its new takeover path writes
 # SMMU registers. The upstream exact-match path otherwise returns too early.

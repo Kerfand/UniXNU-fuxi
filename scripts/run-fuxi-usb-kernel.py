@@ -15,6 +15,25 @@ anchor = 'ROOT=$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)'
 if text.count(anchor) != 1:
     raise SystemExit('kernel recipe root anchor changed')
 text = text.replace(anchor, 'ROOT=' + shlex.quote(str(root)))
+# The fuxi archive builder emits NativeUfs; the shared sheng recipe still
+# names its board-specific library. Select the actual fuxi transport here.
+ufs_anchor = 'UFS_ARCHIVE=$ROOT/build/sheng-ufs/libShengUfs.a'
+if text.count(ufs_anchor) != 1:
+    raise SystemExit('kernel UFS archive selection anchor changed')
+text = text.replace(ufs_anchor, 'UFS_ARCHIVE=$ROOT/build/native-ufs/libNativeUfs.a')
+for old, new in (
+    ('$ROOT/build/virtio-mmio-block/libVirtioMmioBlock.a',
+     '$ROOT/build/native-virtio-block/libNativeVirtioBlock.a'),
+    ('$ROOT/build/ram-block/libRamBlock.a',
+     '$ROOT/build/native-ram-block/libNativeRamBlock.a'),
+    ('$ROOT/build/ram-block/NativeRamBlock.o',
+     '$ROOT/build/native-ram-block/NativeRamBlock.o'),
+):
+    if text.count(old) != 1:
+        raise SystemExit('kernel block archive selection anchor changed: ' + old)
+    text = text.replace(old, new)
+
+
 anchor = '# The optional observation hooks overlap existing root/exec patch context.'
 prepare = '''python3 "$ROOT/scripts/prepare-fuxi-usb-debug.py" \
   --module "$ROOT/drivers/QcomXnuUsbDebug" --xnu "$ROOT/refer/xnu" \

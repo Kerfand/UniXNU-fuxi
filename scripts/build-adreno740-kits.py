@@ -1,13 +1,25 @@
 #!/usr/bin/env python3
 """Add the GMU kit and firmware planner objects to the NativeAdreno archive."""
-import json, subprocess, sys
+import json, os, subprocess, sys
 from pathlib import Path
 ROOT = Path(__file__).resolve().parents[1]
+# An archive entry may be shared by configurations which keep GPU bring-up off.
+# Do not require board GMU sources/firmware unless this build actually enables it.
+if os.environ.get('XNU_NATIVE_ADRENO') == '0' and os.environ.get('XNU_ADRENO_FIRMWARE_PROBE', '0') == '0':
+    print('Adreno kit archive disabled by the selected kernel configuration')
+    raise SystemExit(0)
 c_recipe = json.loads((ROOT / 'build/xnu/ios-obj/DEVELOPMENT_ARM64_BCM2837/bsd/DEVELOPMENT/bsd_init.o.json').read_text().strip().rstrip(','))
 cxx_recipe = json.loads((ROOT / 'build/xnu/ios-obj/DEVELOPMENT_ARM64_BCM2837/iokit/DEVELOPMENT/IOPlatformExpert.cpo.json').read_text().strip().rstrip(','))
 out = ROOT / 'build/adreno740'
 out.mkdir(parents=True, exist_ok=True)
-sources = [ROOT / 'kits/Sm8550Platform' / name for name in ('ShengGmu.c', 'ShengGmuCommandDb.c')]
+_kit_dirs = [ROOT / 'kits/Sm8550Platform', ROOT / 'kits/sheng']
+def _kit_source(name):
+    for directory in _kit_dirs:
+        candidate = directory / name
+        if candidate.is_file():
+            return candidate
+    return _kit_dirs[0] / name
+sources = [_kit_source(name) for name in ('ShengGmu.c', 'ShengGmuCommandDb.c')]
 sources += [ROOT / 'kits/sheng/ShengGmuVotes.c']
 sources += [ROOT / 'kits/AdrenoFirmware' / name for name in
             ('AdrenoHfi.c', 'AdrenoHfiStartup.c', 'AdrenoHfiVotes.c', 'AdrenoFirmware.c')]

@@ -31,7 +31,10 @@ while index < len(args):
         command += ["-o", str(OUT / "BootWatchdogPolicy.o")]
         index += 2
         continue
-    if arg.startswith(("-MMD", "-MT", "-MF")):
+    if arg in ("-MF", "-MJ", "-MT", "-MQ"):
+        index += 2
+        continue
+    if arg in ("-MD", "-MMD", "-MP") or arg.startswith(("-MF", "-MJ", "-MT", "-MQ")):
         index += 1
         continue
     command.append(arg)

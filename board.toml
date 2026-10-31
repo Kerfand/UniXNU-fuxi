@@ -107,6 +107,8 @@ archives = [
   "build-fuxi-platform-power.py",
   "build-arm-driver.py NativeVirtioBlock",
   "build-arm-driver.py NativeRamBlock",
+  "build-fuxi-storage-bindings.py --component NativeVirtioBlock",
+  "build-fuxi-storage-bindings.py --component NativeRamBlock",
   "build-arm-driver.py NativeAES",
   "build-software-aes-bindings.py --objects-dir build/native-aes",
   "build-libpthread-kernel.py",
