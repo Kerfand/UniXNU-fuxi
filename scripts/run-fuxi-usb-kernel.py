@@ -29,7 +29,7 @@ for old, new in (
     ('$ROOT/build/ram-block/NativeRamBlock.o',
      '$ROOT/build/native-ram-block/NativeRamBlock.o'),
 ):
-    if text.count(old) != 1:
+    if old not in text:
         raise SystemExit('kernel block archive selection anchor changed: ' + old)
     text = text.replace(old, new)
 

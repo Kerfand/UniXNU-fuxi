@@ -100,6 +100,7 @@ archives = [
 # when their feature is off. Without it the link stops on native_legacy_display_probe,
 # boot_progress_poll, the verified-root chain and mockfs.
   "build-watchdog-policy.py",
+  "prepare-sheng-gmu-votes.py",
   "build-adreno740-kits.py",
   "build-fuxi-stub.py",
   "build-mockfs-fixture.py",
