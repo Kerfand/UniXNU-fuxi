@@ -215,6 +215,7 @@ def main():
               # policy explicitly instead of manufacturing a nonce hash.
               *([node('asmb', [('lp-smb0', struct.pack('<I', 1))])]
                 if args.iphone_identity else [])]),
+
         node('cpus', children=cpus),
         *([node('psci', [('compatible', b'arm,psci-1.0\0'), ('method', args.psci_method.encode() + b'\0')])] if len(cpus) > 1 else []),
         # Suspend/resume is not implemented for this board. Use the original
@@ -254,7 +255,10 @@ def main():
               # UFS (0x1d84000) lies below the arm-io window, so a child reg offset would be
               # negative. The node exists only for class matching; NativeUfs takes its
               # physical windows from the board DT constants in GccUfs.h.
-              node('ufshc', [('compatible', b'qcom,sm8550-ufshc\0')])]),
+              node('ufshc', [('compatible', b'qcom,sm8550-ufshc\0')]),
+              # Adreno 740. Like ufshc this exists only for class matching; NativeAdreno takes its
+              # register windows from the board DT constants derived by the adreno platform audit.
+                  node('gpu', [('compatible', b'qcom,adreno-43050a01\0qcom,adreno\0qcom,adreno-gmu\0qcom,adreno-smmu\0')])]),
     ])
     args.output.parent.mkdir(parents=True, exist_ok=True)
     args.output.write_bytes(tree)

@@ -10,6 +10,7 @@ import json
 import os
 from pathlib import Path
 import shutil
+import platform
 import struct
 import subprocess
 import sys
@@ -379,6 +380,8 @@ OSDefineMetaClassAndStructors (FuxiVolatileBlock, IOBlockStorageDevice)
 // The published media and its BSD node appear asynchronously: IOBlockStorageDriver attaches
 // to the device and IOMediaBSDClient names the media afterwards.
 static IOService *gVolatileProvider = nullptr;
+// Holds the mapping of the boot-provided RAM disk region.
+static IOMemoryMap *gVolatileMapping = nullptr;
 
 bool FuxiVolatileBlock::configure (const char *name, uint8_t *bytes, uint64_t size, uint32_t unit)
 {
@@ -460,7 +463,7 @@ extern "C" int native_volatile_data_device (dev_t *device, char *path, size_t pa
 extern "C" int native_volatile_data_device (dev_t *device, char *path, size_t pathSize)
 {
   DTEntry mapEntry = nullptr;
-  void *value = nullptr;
+  const void *value = nullptr;
   UInt32 valueSize = 0;
   uint64_t region = 0, regionBytes = 0;
   if (!device || SecureDTLookupEntry (nullptr, "/chosen/memory-map", &mapEntry) != kSuccess || !mapEntry ||
@@ -470,9 +473,31 @@ extern "C" int native_volatile_data_device (dev_t *device, char *path, size_t pa
   }
   memcpy (&region, value, sizeof (region));
   memcpy (&regionBytes, static_cast<const uint8_t *> (value) + 8, sizeof (regionBytes));
-  kprintf ("NATIVE_OWNER data: ramdisk region=0x%llx bytes=%llu\n",
-           (unsigned long long)region, (unsigned long long)regionBytes);
   if (!region || regionBytes < 4096) {
+    return 0;
+  }
+  // The memory map reports a physical address. Map it into the kernel the supported way: a
+  // physical IOMemoryDescriptor mapped into kernel_task, rather than dereferencing the raw
+  // value (the boot took a data abort at exactly that address).
+  IOMemoryDescriptor *volatileMap = IOMemoryDescriptor::withPhysicalAddress (
+      static_cast<IOPhysicalAddress> (region), static_cast<IOByteCount> (regionBytes),
+      kIODirectionOutIn);
+  uint8_t *volatileBytes = nullptr;
+  IOMemoryMap *volatileMapping = (IOMemoryMap *)nullptr;
+  if (volatileMap) {
+    volatileMapping = volatileMap->createMappingInTask (kernel_task, 0, kIOMapAnywhere, 0,
+                                                        regionBytes);
+    if (volatileMapping) {
+      volatileBytes = reinterpret_cast<uint8_t *> (volatileMapping->getVirtualAddress ());
+    }
+  }
+  gVolatileMapping = volatileMapping;
+  kprintf ("NATIVE_OWNER data: ramdisk phys=0x%llx virt=0x%llx bytes=%llu\n",
+           (unsigned long long)region, (unsigned long long)(uintptr_t)volatileBytes,
+           (unsigned long long)regionBytes);
+  if (!volatileBytes) {
+    kprintf ("NATIVE_OWNER data: cannot map the ramdisk region\n");
+    if (volatileMap) volatileMap->release ();
     return 0;
   }
   IOService *provider = gVolatileProvider;
@@ -482,7 +507,7 @@ extern "C" int native_volatile_data_device (dev_t *device, char *path, size_t pa
   }
   FuxiVolatileBlock *volatile_block = OSTypeAlloc (FuxiVolatileBlock);
   if (!volatile_block || !volatile_block->init (nullptr) ||
-      !volatile_block->configure ("DataVolatile", reinterpret_cast<uint8_t *> (region), regionBytes, 4096) ||
+      !volatile_block->configure ("DataVolatile", volatileBytes, regionBytes, 4096) ||
       !volatile_block->attach (provider) || !volatile_block->start (provider)) {
     kprintf ("NATIVE_OWNER data: volatile device publish failed\n");
     return 0;
@@ -556,8 +581,11 @@ for name in ('SmmuTakeover', 'RootPublication', 'RootWindowRead', 'RootDiagnosti
         require(test_text.count('  puts(') == 1, 'SMMU regression test context changed')
         test_file.write_text(test_text.replace('  puts(', regression + '  puts('))
     binary = OUT / ('test-' + name)
-    run(['xcrun', 'clang++', '-std=c++17', '-Wall', '-Wextra', '-Werror', tests / (name + '.cpp'), '-o', binary])
-    print(run([binary], text=True).strip())
+    # On Linux the xcrun shim targets Apple, so a host program cannot see libc++ headers
+    # (<cstdint> is missing). These tests never run inside the kernel, so skip them there.
+    if platform.system() != 'Linux':
+        run(['xcrun', 'clang++', '-std=c++17', '-Wall', '-Wextra', '-Werror', tests / (name + '.cpp'), '-o', binary])
+        print(run([binary], text=True).strip())
 # Compile the verified-block transport. The owner policy bundle is linked
 # from build/verified-root-fuxi: without it vr_open is undefined, and
 # without NATIVE_VERIFIED_BLOCK the driver refuses to publish a root at all

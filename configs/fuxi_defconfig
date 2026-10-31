@@ -28,24 +28,25 @@ CONFIG_XNU_SOURCE_CORECRYPTO14=y
 # kernelcache ran against this build's digest tables.
 # The hardware AES accelerator requires the prelinked crypto closure, which is
 # the mode that crashed. Bring-up runs without it.
-CONFIG_XNU_NATIVE_AES=n
+CONFIG_XNU_NATIVE_AES=y
+CONFIG_XNU_NATIVE_AES_ARCHIVE="{tree}/build/native-aes/libSoftwareAES.a"
 # Requires NATIVE_AES in build-xnu-4k-baseline.sh, and it is only a root device.
-CONFIG_XNU_NATIVE_RAM_BLOCK=n
+CONFIG_XNU_NATIVE_RAM_BLOCK=y
 # The owner crypto probe requires the prelinked bootstrap mode: prng_random.o
 # then leaves XNU_SOURCE_CORECRYPTO14 undefined and the original prelinked Apple
 # crypto component supplies it, which is what sheng_defconfig does.
 CONFIG_XNU_CRYPTO_BOOTSTRAP="prelinked"
-CONFIG_XNU_OWNER_DATA_VOLUME_UUID="18AB5557-DC2D-469B-8758-855E60F5B0DF"
+CONFIG_XNU_OWNER_DATA_VOLUME_UUID="C8869B91-3D45-41A5-9EA2-3F686B6F4FA1"
 # NativePrelink also rebases functions which are not referenced by the XNU
 # link itself. Force-load the single-object archive so IORPCMessageFromMach
 # remains in the final candidate kernel for that later pass.
-CONFIG_XNU_EXTRA_LD_ARCHIVES="-Wl,-force_load,{tree}/build/fuxi-stub/libFuxiBringUpStub.a -Wl,-force_load,{tree}/.cache/fuxi-qud-build/libQcomXnuUsbDebug.a"
+CONFIG_XNU_EXTRA_LD_ARCHIVES="-Wl,-force_load,{tree}/build/watchdog-policy/libWatchdogPolicy.a -Wl,-force_load,{tree}/build/fuxi-stub/libFuxiBringUpStub.a -Wl,-force_load,{tree}/.cache/fuxi-qud-build/libQcomXnuUsbDebug.a"
 # The verified-root provider is linked by build-xnu-4k-baseline.sh itself once
 # XNU_VERIFIED_ROOT_PROBE=1, so it must not also be force-loaded here.
 CONFIG_XNU_VERIFIED_ROOT_ARCHIVE="{tree}/build/verified-root-fuxi/libVerifiedRootProbe.a"
 # Bring-up: no virtio, no owner-trust chain, no boot progress. The archives that produce
 # them are not in board.toml, because they need the storage ABI audit evidence.
-CONFIG_XNU_NATIVE_VIRTIO_BLOCK=n
+CONFIG_XNU_NATIVE_VIRTIO_BLOCK=y
 CONFIG_XNU_OWNER_ROOT_AUDIT=y
 CONFIG_XNU_OWNER_ROOT_TRUST=y
 CONFIG_XNU_VERIFIED_ROOT_PROBE=y
@@ -78,3 +79,6 @@ CONFIG_XNU_OWNER_UNION_SYSTEMOS=y
 # The cache carrier is the SystemOS cryptex volume of this image. The recipe defaults
 # to sheng's 8846FE78-2910-4297-AF97-D59BB6F8FC16, which is not in our signed policy.
 CONFIG_XNU_OWNER_CACHE_VOLUME_UUID="96096B28-B6DC-4BC7-9D3A-2632A0FE53F1"
+
+CONFIG_XNU_OWNER_DATA_MOUNT=y
+CONFIG_XNU_OWNER_BOOT_MANIFEST=y

@@ -138,7 +138,12 @@ def main():
     # -Wno-missing-include-dirs first: the recorded kernel command line carries
     # include directories the archive stage has not created yet, and -Werror
     # would promote that diagnostic to a failure.
-    include = ['-Wno-missing-include-dirs', '-I', str(args.kit / 'include'), '-Werror']
+    # clang 24 (the Linux toolchain) enables -Wunsafe-buffer-usage by default and the kit
+    # builds with -Werror; Xcode's clang leaves it off. The other device scripts suppress
+    # newer-clang diagnostics the same way.
+    include = ['-Wno-missing-include-dirs', '-Wno-unknown-warning-option',
+               '-Wno-unsafe-buffer-usage', '-Wno-unsafe-buffer-usage-in-libc-call',
+               '-I', str(args.kit / 'include'), '-Werror']
     objects = []
     for source in (args.kit / 'src/verified_root.c', args.kit / 'adapters/xnu_crypto.c'):
         destination = out / (source.stem + '.o')
