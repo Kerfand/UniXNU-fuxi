@@ -156,6 +156,10 @@ def install_basic_headers(fakeroot: Path, clang: Path) -> int:
 
 
 def main() -> None:
+    if sys.platform != "linux":
+        # On macOS the real SDK supplies everything this script repairs.
+        print("not needed on this platform")
+        return
     tree = Path(sys.argv[1]).resolve() if len(sys.argv) > 1 else Path.cwd().resolve()
     fakeroot = tree / ".cache/fakeroot"
     if not fakeroot.is_dir():
