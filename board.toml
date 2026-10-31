@@ -85,6 +85,7 @@ archives = [
   # LUN 0, validates the GPT, finds the userdata entry and inspects its first
   # block.  Root publication remains disabled until this hardware checkpoint
   # proves the fuxi controller/SMMU hand-off and the flashed SHNGROOT manifest.
+  "build-fuxi-ufs.py",
   # Signed owner policy for the OS and SystemOS windows. The manifests are 65 MB of
   # block hashes, so they are not in the repository: pre_build downloads the release
   # asset fuxi-root-policy of the framework repository and publishes its directory
@@ -92,6 +93,7 @@ archives = [
   # the build tree only holds tracked files, so an environment variable is the only
   # input that survives. Regenerate the manifests with
   # scripts/build-fuxi-root-policy.py when the windows or the owner key change.
+  "build-fuxi-verified-root.py",
   # QcomXnuUsbDebug: the CDC ACM log channel this board reads over USB.
   "build-fuxi-usb-debug.py",
 # build-fuxi-stub.py defines, weakly, the native symbols the XNU patches reference even
@@ -100,6 +102,7 @@ archives = [
   "build-fuxi-stub.py",
   "build-mockfs-fixture.py",
   # Bounded, no-MMIO service publication test for this exact iPhone10,3 cache.
+  "build-fuxi-platform-power.py",
   "build-libpthread-kernel.py",
 ]
 
