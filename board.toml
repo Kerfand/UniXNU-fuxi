@@ -73,6 +73,7 @@ defconfig = "fuxi_defconfig"
 #   NativeRamBlock follows it out: the build requires NATIVE_AES=1 for it. Neither is
 #   needed to boot without a root device.
 archives = [
+  "fix-fakeroot-headers.py",
   # IOStorageFamily comes from the target prelink dependency closure (including APFS).
   # Never add build-fuxi-io-storage.py here while that provider is retained.
   "build-corecrypto-14.py",

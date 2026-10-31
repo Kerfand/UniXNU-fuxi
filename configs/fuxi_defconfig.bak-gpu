@@ -1,0 +1,84 @@
+# Kernel configuration of the fuxi image. CONFIG_XNU_<NAME> becomes XNU_<NAME> for the kernel build.
+#
+# The guarded fuxi PMGR archive probes the original iPhone10,3 ABI. It does
+# not provide working fuxi power controls; unsupported operations panic.
+
+CONFIG_XNU_BUILD_ARCHIVES=y
+CONFIG_XNU_SOURCE_PTHREAD=y
+CONFIG_XNU_ARM_DT_PLATFORM=y
+CONFIG_XNU_ARMCPU=y
+# Use the prelinked Apple IOStorageFamily as the only storage-class provider.
+# NativeUfs subclasses those existing classes; it does not link a second copy
+# of IOStorageFamily.  FIX061 enables its read-only probe but not root mode.
+CONFIG_XNU_NATIVE_UFS=y
+CONFIG_XNU_TRUST_CACHE_RUNTIME=y
+# Source mockfs remains available for bring-up; FIX061 only qualifies native
+# UFS transport/GPT/manifest access and deliberately does not publish a root.
+CONFIG_XNU_SOURCE_MOCKFS=y
+CONFIG_XNU_SHENG_PMGR=y
+CONFIG_XNU_NATIVE_CS_HASH_CACHE=y
+CONFIG_XNU_DT_PANIC_REGION=y
+CONFIG_XNU_ZONE_PGZ_ALIGNMENT_PROBE=y
+CONFIG_XNU_NATIVE_ARCH_TIMER=y
+CONFIG_XNU_NATIVE_PAN=y
+
+CONFIG_XNU_SOURCE_CORECRYPTO14=y
+# Keep every crypto call on the source implementation. The first boot crashed
+# inside _SHA512_Init (far 0x40) because prelinked callers from the target
+# kernelcache ran against this build's digest tables.
+# The hardware AES accelerator requires the prelinked crypto closure, which is
+# the mode that crashed. Bring-up runs without it.
+CONFIG_XNU_NATIVE_AES=n
+CONFIG_XNU_NATIVE_AES_ARCHIVE="{tree}/build/native-aes/libSoftwareAES.a"
+# Requires NATIVE_AES in build-xnu-4k-baseline.sh, and it is only a root device.
+CONFIG_XNU_NATIVE_RAM_BLOCK=y
+# The owner crypto probe requires the prelinked bootstrap mode: prng_random.o
+# then leaves XNU_SOURCE_CORECRYPTO14 undefined and the original prelinked Apple
+# crypto component supplies it, which is what sheng_defconfig does.
+CONFIG_XNU_CRYPTO_BOOTSTRAP="prelinked"
+CONFIG_XNU_OWNER_DATA_VOLUME_UUID="C8869B91-3D45-41A5-9EA2-3F686B6F4FA1"
+# NativePrelink also rebases functions which are not referenced by the XNU
+# link itself. Force-load the single-object archive so IORPCMessageFromMach
+# remains in the final candidate kernel for that later pass.
+CONFIG_XNU_EXTRA_LD_ARCHIVES="-Wl,-force_load,{tree}/build/watchdog-policy/libWatchdogPolicy.a -Wl,-force_load,{tree}/build/fuxi-stub/libFuxiBringUpStub.a -Wl,-force_load,{tree}/.cache/fuxi-qud-build/libQcomXnuUsbDebug.a"
+# The verified-root provider is linked by build-xnu-4k-baseline.sh itself once
+# XNU_VERIFIED_ROOT_PROBE=1, so it must not also be force-loaded here.
+CONFIG_XNU_VERIFIED_ROOT_ARCHIVE="{tree}/build/verified-root-fuxi/libVerifiedRootProbe.a"
+# Bring-up: no virtio, no owner-trust chain, no boot progress. The archives that produce
+# them are not in board.toml, because they need the storage ABI audit evidence.
+CONFIG_XNU_NATIVE_VIRTIO_BLOCK=n
+CONFIG_XNU_OWNER_ROOT_AUDIT=y
+CONFIG_XNU_OWNER_ROOT_TRUST=y
+CONFIG_XNU_VERIFIED_ROOT_PROBE=y
+# The GPU is the same Adreno 740 as the sheng board and the GMU windows are SoC level
+# addresses, so the qualified driver is reusable. ShengGmu.h ships in kits/sheng, and
+# the offline probe validates the firmware before the kernel can reach IOKit services.
+# The offline probe needs libAdrenoFirmwareProbe.a, which no fuxi script builds yet.
+CONFIG_XNU_ADRENO_FIRMWARE_PROBE=n
+# The driver needs libNativeAdreno.a, a device-side archive no fuxi script builds yet.
+# Park it: nothing exercises the GPU until the kernel reaches IOKit services.
+CONFIG_XNU_NATIVE_ADRENO=n
+# The legacy display archive runs a qualification audit pinned to the sheng kernelcache.
+CONFIG_XNU_NATIVE_LEGACY_DISPLAY=n
+CONFIG_XNU_NATIVE_MOBILE_DISPLAY=n
+CONFIG_XNU_ARMVIRT_PLATFORM=n
+# The boot-progress archive requires NativeUfs and its qualification evidence.
+CONFIG_XNU_BOOT_PROGRESS=n
+
+# The boot now reaches launchd: the trust caches load, AMFI accepts the adhoc
+# signatures and dyld runs libignition. It stops at
+#   shared_region: [1(launchd)] vm_shared_region_start_address() failed
+# because the dyld shared cache lives in the SystemOS cryptex. Owner union
+# composition mounts that cryptex over /System/Cryptexes/OS. CACHE_MOUNT requires
+# OWNER_ROOT_TRUST (on), CACHE_STARTUP requires CACHE_MOUNT, and UNION_SYSTEMOS
+# requires CACHE_STARTUP with CRYPTEX_FILES=0. No scratch Data volume is needed:
+# XNU_OWNER_DATA_VOLUME_UUID is only read when DATA_MOUNT and NATIVE_RAM_BLOCK are 1.
+CONFIG_XNU_OWNER_CACHE_MOUNT=y
+CONFIG_XNU_OWNER_CACHE_STARTUP=y
+CONFIG_XNU_OWNER_UNION_SYSTEMOS=y
+# The cache carrier is the SystemOS cryptex volume of this image. The recipe defaults
+# to sheng's 8846FE78-2910-4297-AF97-D59BB6F8FC16, which is not in our signed policy.
+CONFIG_XNU_OWNER_CACHE_VOLUME_UUID="96096B28-B6DC-4BC7-9D3A-2632A0FE53F1"
+
+CONFIG_XNU_OWNER_DATA_MOUNT=y
+CONFIG_XNU_OWNER_BOOT_MANIFEST=y

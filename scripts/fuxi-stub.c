@@ -395,3 +395,22 @@ FUXI_WEAK unsigned long native_virtio_read_failures;
 FUXI_WEAK unsigned long native_virtio_read_requests;
 FUXI_WEAK unsigned long native_virtio_ready;
 FUXI_WEAK unsigned long native_virtio_verified_blocks;
+
+/* Display/GOP hand-off entry points the GPU driver references but a headless bring-up does not
+ * provide; weak stubs keep the kernel linkable until the display path is ported. */
+__attribute__((weak)) int boot_log_export_put(unsigned int tag, const void *data, unsigned int len)
+{
+	(void)tag; (void)data; (void)len;
+	return 0;
+}
+
+__attribute__((weak)) int native_gop_handoff_call(void *ctx)
+{
+	(void)ctx;
+	return 0;
+}
+
+__attribute__((weak)) void *native_gop_handoff_memory(void)
+{
+	return 0;
+}

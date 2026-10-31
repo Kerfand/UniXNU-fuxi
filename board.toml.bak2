@@ -1,0 +1,270 @@
+# Board description of the Xiaomi 13 (fuxi, SM8550), read by the unixnu build driver.
+#
+# Derived from UniXNU/UniXNU-sheng: same SoC (SM8550), so the IPSW choice, the
+# kernel archive list and the prelink pins carry over unchanged. What differs is
+# the partition geometry, the firmware checkout and the kernel arguments that name
+# sheng-only drivers.
+
+[board]
+name = "fuxi"
+soc = "SM8550"
+description = "Xiaomi 13"
+kit = "fuxi"                          # the package/ of this repository appears as kits/fuxi in the build tree
+
+# The target OS image: the unchanged iPad7,1 iPadOS 17.7.11 restore image. Give --ipsw PATH to use a local file; without
+# it the remote url is read with range requests, only the members that are needed.
+[ipsw]
+url = "https://updates.cdn-apple.com/2025FallFCS/fullrestores/122-77006/1158E502-D76D-4226-AA06-ED5E30CD1111/iPhone10,3,iPhone10,6_16.7.16_20H392_Restore.ipsw"
+product = "iPhone10,3"
+version = "16.7.16"
+build = "20H392"
+device_class = "d22ap"          # iPhone 10,3; the same IPSW also ships d221ap (iPhone 10,6)
+chip_id = 0x8015
+board_id = 6                    # ApBoardID of the d22ap identity; d221ap uses 14, and mixing
+                                # them makes the prelink answer "no Erase build identity"
+fetch = ["KernelCache", "DeviceTree", "StaticTrustCache", "Cryptex1,SystemTrustCache"]   # the small components
+
+# The two disk images behind the userdata windows. Pins are added once the userdata step is run;
+# the kernel and payload steps never fetch them.
+# [ipsw.sha256]
+# "087-86698-044.dmg" = ""     # OS
+# "087-86593-047.dmg" = ""     # Cryptex1,SystemOS
+
+[userdata]
+# Xiaomi 13 (fuxi) userdata is /dev/block/sda32: first sector 24887808, 469917144
+# sectors of 512 bytes, i.e. 240.6 GiB. These values are 4 KiB LBAs, so both numbers
+# are the sysfs values divided by 8.
+first_lba = 0x2f7840
+last_lba = 0x3afc3fa
+lba_bytes = 4096
+windows = [
+  { name = "OS", component = "OS" },
+  { name = "SystemOS", component = "Cryptex1,SystemOS" },
+]
+
+[kernel]
+defconfig = "fuxi_defconfig"
+# Archive builders of the kernel step, in order. Each is a script of the build tree with its arguments.
+# Bring-up list. Dropped from the sheng set:
+#   build-sheng-platform-power.py        sheng PMGR power domains, no fuxi port
+#   build-arm-driver.py NativeVirtioBlock + the two build-native-virtio-bindings.py steps
+#                                        from the vfs_conf.o.json compile record, no audit involved.
+#   the two build-native-virtio-bindings.py steps need build/storage-abi/interface-audit.json,
+#                                        which only scripts/audit-storage-interface.py writes,
+#                                        and that audit needs the live guest metadata snapshot
+#   build-boot-progress.py               its guard requires the audited UFS/owner-root and virtio build
+# fuxi boots from UFS, so the virtio path is not needed to reach a console.
+# Also dropped: build-arm-driver.py NativeAdreno and its two kit steps. NativeAdrenoGmuConfig.h
+# includes "ShengGmu.h", which ships in the sheng device package/; fuxi needs its own GMU
+# table before the GPU can be built.
+#   build-native-legacy-display.py        runs scripts/audit-mobile-graphics-legacy.py, which pins the
+#                                        sha256 of IOMobileGraphicsFamily from the sheng target iPadOS
+#                                        17.7.11 kernelcache and wants a bootstrap candidate in
+#                                        build/native-prelink. fuxi targets iPhone X iOS 16.7.16, so the
+#                                        pin has to be re-derived before the display driver can build.
+# Milestone 1 is a kernel that links at all; the display and GPU come back once the audit pins are
+# recomputed for the 16.7.16 kernelcache.
+# corecrypto is built from source because ArmCpu requires the real source provider.
+# The first boot died in _SHA512_Init (far 0x40) with the prelinked callers from the
+# 16.7.16 kernelcache, so fuxi_defconfig asks for CONFIG_XNU_CRYPTO_BOOTSTRAP="source"
+# and keeps every crypto call on the same implementation.
+#   NativeAES is dropped for now: build-xnu-4k-baseline.sh only allows it with
+#   CRYPTO_BOOTSTRAP=prelinked, which is the mode that crashed the first boot.
+#   NativeRamBlock follows it out: the build requires NATIVE_AES=1 for it. Neither is
+#   needed to boot without a root device.
+archives = [
+  # IOStorageFamily comes from the target prelink dependency closure (including APFS).
+  # Never add build-fuxi-io-storage.py here while that provider is retained.
+  "build-watchdog-policy.py",
+  "build-corecrypto-14.py",
+  "build-corecrypto-14.py --namespace",
+  "build-arm-driver.py ArmDTPlatform",
+  "build-arm-driver.py ArmCpu",
+  # FIX061 is a deliberately read-only fuxi UFS qualification build.  The
+  # NativeUfs probe adopts the SM8550 controller state left by firmware, reads
+  # LUN 0, validates the GPT, finds the userdata entry and inspects its first
+  # block.  Root publication remains disabled until this hardware checkpoint
+  # proves the fuxi controller/SMMU hand-off and the flashed SHNGROOT manifest.
+  "build-fuxi-ufs.py",
+  # Signed owner policy for the OS and SystemOS windows. The manifests are 65 MB of
+  # block hashes, so they are not in the repository: pre_build downloads the release
+  # asset fuxi-root-policy of the framework repository and publishes its directory
+  # as FUXI_ROOT_POLICY through GITHUB_ENV. Archive entries get no substitution and
+  # the build tree only holds tracked files, so an environment variable is the only
+  # input that survives. Regenerate the manifests with
+  # scripts/build-fuxi-root-policy.py when the windows or the owner key change.
+  "build-fuxi-verified-root.py",
+  # QcomXnuUsbDebug: the CDC ACM log channel this board reads over USB.
+  "build-fuxi-usb-debug.py",
+# build-fuxi-stub.py defines, weakly, the native symbols the XNU patches reference even
+# when their feature is off. Without it the link stops on native_legacy_display_probe,
+# boot_progress_poll, the verified-root chain and mockfs.
+  # Boot progress plus the launch policy that writes launchd's disabled.plist: the
+  # vendor kernel needs it to skip jobs whose hardware or network is absent.
+  "build-fuxi-stub.py",
+  "build-mockfs-fixture.py",
+  # Bounded, no-MMIO service publication test for this exact iPhone10,3 cache.
+  "build-fuxi-platform-power.py",
+  "build-libpthread-kernel.py",
+]
+
+[kernel.prelink]
+tool = "kits/NativePrelink/emit_prelink.py"
+kernel = "build/xnu/ios-obj/DEVELOPMENT_ARM64_BCM2837/mach.development.bcm2837.unstripped.noctf"
+kernelcache_sha256 = "2ec297bac95bcba01046fd0148e97e7e5885c05a6c18827f39f534ba375c1221"
+slide = "-0x1000000"
+# early_security_init is deliberately absent. emit_prelink only patches the AMFI
+# initializer when the board supplies its address, and validates that the address
+# sits inside original module code. Neither the sheng value (iPadOS 17.7.11) nor the
+# address published by Xyvern08371/unixnu-fuxi is valid for this kernelcache, so the
+# prelink stopped with "Early security initializer outside original module code".
+# Leaving it empty skips the patch (early_security_init or {}).
+roots = [
+  # com.apple.kec.corecrypto is left out: fuxi_defconfig bootstraps crypto from
+  # source (CONFIG_XNU_CRYPTO_BOOTSTRAP="source"), so the kernel already carries
+  # corecrypto_kext_start() and its own registration order. Keeping the prelinked
+  # Apple kext as well runs a second entropy initialisation whose SHA512_Init calls
+  # this kernel's code before g_crypto_funcs is set, which is the data abort at
+  # _SHA512_Init + 0x10 with far 0x40.
+  "com.apple.AppleFSCompression.AppleFSCompressionTypeZlib",
+  "com.apple.driver.AppleARMPlatform",
+  "com.apple.driver.AppleARMWatchdogTimer",
+  "com.apple.driver.AppleAudioClockLibs",
+  "com.apple.driver.AppleEffaceableStorage",
+  "com.apple.driver.AppleIISController",
+  "com.apple.driver.AppleM2ScalerCSCDriver",
+  "com.apple.driver.AppleMobileFileIntegrity",
+  "com.apple.driver.ApplePMGR",
+  "com.apple.driver.IODARTFamily",
+  "com.apple.filesystems.apfs",
+  "com.apple.iokit.CoreAnalyticsFamily",
+  "com.apple.iokit.IOAVFamily",
+  "com.apple.iokit.IOAudio2Family",
+  "com.apple.iokit.IOCECFamily",
+  "com.apple.iokit.IOCryptoAcceleratorFamily",
+  "com.apple.iokit.IOGPUFamily",
+  "com.apple.iokit.IOHDCPFamily",
+  "com.apple.iokit.IOMobileGraphicsFamily",
+  "com.apple.iokit.IOReportFamily",
+  "com.apple.iokit.IOSlowAdaptiveClockingFamily",
+  "com.apple.iokit.IOSurface",
+  "com.apple.kec.Libm",
+  "com.apple.kext.AppleMatch",
+  "com.apple.kext.CoreTrust",
+  "com.apple.security.AppleImage4",
+  "com.apple.security.sandbox",
+  "com.apple.iokit.IOHIDFamily",
+  "com.apple.iokit.IOHIDEventDriver",
+]
+
+[firmware]
+config = "fuxi"                       # Resources/Configs/fuxi.toml in the Mu-Silicium checkout (--uefi)
+dsc = "Platforms/Xiaomi/fuxiPkg/fuxi.dsc"
+fd = "Build/fuxiPkg/{target}_CLANGPDB/FV/SILICIUM_UEFI.fd"
+submodules = ["Common/Mu", "Common/Mu_OEM_Sample", "Silicium-ACPI", "Silicon/Silicium/OpensslPkg/Library/OpensslLib/openssl"]
+patches = ["Resources/MuPatches/Gic-Spurious.patch"]
+packages = [
+  "{uefi}",
+  "{uefi}/Platforms/Xiaomi",
+  "{tree}/package",
+  "{tree}/drivers/DarwinBoot",
+  "{edk2}",
+  "{uefi}/Common/Mu",
+  "{uefi}/Common/Mu_OEM_Sample",
+  "{uefi}/Silicon/Qualcomm",
+  "{uefi}/Silicon/Silicium",
+  "{uefi}/Silicium-ACPI",
+  "{uefi}/Silicium-ACPI/Platforms/Xiaomi",
+  "{uefi}/Silicium-ACPI/Silicon/Qualcomm",
+]
+
+[firmware.defines]
+ENABLE_SECUREBOOT = "1"
+DEVICE_MODEL = "fuxi"
+MEMORY_PROTECTION = "TRUE"
+SHIP_MODE = "FALSE"
+BUILDID_STRING = "fuxi-research"
+
+# The ramdisk of the boot image: a FAT volume with the UniXNU config, the kernel, its device tree and
+# the optional trust cache and Data seed. The loader (DarwinBoot) is part of the firmware volume.
+[payload]
+volume = "FUXIESP"
+size_mib = 192
+loader = "firmware"
+title = "FUXI FIX061 UFS READONLY"
+dram_size = "0x80000000"             # SMEM RAM table, SM8550 is shared with sheng
+panic_screen = false
+# DarwinBoot caps the ADT sidecar at 16 MiB, so the 65 MB signed policy cannot ride
+# there; it is compiled into the kernel instead (117 MiB, under the 128 MiB kernel
+# limit). That moves the fixed padding patch-xnu-entry-probe.py injects the screen
+# into, so the screen is off and qcom-usb-debug=1 carries the diagnostics.
+# The original static/System trust caches of the same IPSW.
+trust_cache_sha256 = [
+  "eb1475f643f45a974ebd40596f6e2b1cdf40205d2ca3c6094d774886099399c3",
+]
+# The bundle above packs two caches from the iPhone10,3 16.7.16 (20H392) IPSW, built
+# by scripts/make-trust-cache-bundle.py: 087-86698-044.dmg.trustcache (StaticTrustCache,
+# sha256 63e01c03..., 2760 entries) and 087-86593-047.dmg.trustcache
+# (Cryptex1,SystemTrustCache, sha256 9cc478fe..., 61 entries). DarwinBoot reads the
+# bundle, ValidTrustCaches() checks it, and /chosen/memory-map/TrustCache receives the
+# address and size.
+kernel_args = [
+  "-v",
+  "serial=3",
+  "debug=0x14e",
+  "kt_fixed_zones=120",
+  "offline-legacy-register=1",
+  "offline-legacy-gop=1",
+  "offline-legacy-unit-scale=2",
+  "offline-legacy-pm=1",
+  "offline-legacy-validate=1",
+  "offline-legacy-transfer=1",
+  "offline-legacy-cpu-present=1",
+  "offline-hid-home=1",
+  "offline-hid-input=1",
+  "offline-legacy-phase=4",
+  "offline-mobile-graphics-client=1",
+  "offline-mobile-graphics-load=1",
+  "offline-apfs-load=1",
+  "boot-progress=2",
+  "sheng-pmgr=2",
+  "native-ufs-root=1",
+  "native-ufs-diagnostics=1",
+  # USB CDC ACM kernel log; the receiver identifies VID/PID 1209:316d.
+  "qcom-usb-debug=1",
+  "-enable_kprintf_spam",
+  "-apfs_shared_datavolume",
+  "offline-key-events=1",
+  "armcpu-diagnostics=1",
+  "armcpu-spi-ipi=1",
+  "-no_slto_panic",
+  "ml-timeout-lock-panic-scale=40",
+]
+
+# native-ufs-root=1 stays off.  probe=11 always stops with a bounded diagnostic
+# panic: for every window of the flashed SHNGROOT image it reports the absolute
+# userdata offset, the recorded size and hash, and the signature word at +512 of
+# the window's first block, so a wrong placement is caught before any mount.
+# It never publishes media and never writes to UFS.  Root publication needs a
+# signed per-capacity policy bundle from kits/VerifiedRoot (tools/manifest.py);
+# this board does not generate one yet, and NativeUfs::signedVolumeUuid()
+# returns false without it.
+
+[payload.adt]
+tool = "scripts/make-sheng-adt.py"
+chip_id = "207"
+owned_memory_size = "0x130000000"
+root_match_volume_uuid = "DADD93F8-DBBF-4B17-A1DF-0F11E64172F7"
+cpu_regs = "0,0x100,0x200,0x300,0x400,0x500,0x600,0x700"
+# The Data seed is a dense 64 MiB APFS image (mkapfs, 16384 blocks of 4096) rather than the
+# packed sparse format, because FuxiVolatileBlock serves it straight out of the memory
+# DarwinBoot reserves for the ramdisk and needs no unpacker.
+packed_data_ramdisk = true
+# The kernel is built for an iPhone X; without this MobileGestalt sees an iPad
+# and the UI lays out for a tablet.
+iphone_identity = true
+unique_chip_id = "0123456789ABCDEF"   # fixed bring-up seed: the payload build refuses "required"
+                                      # without the UNIXNU_UNIQUE_CHIP_ID secret, and this value only
+                                      # fills the ADT chip-id field on our own device
+
+# fuxi's stock device tree already declares /reserved-memory/splash_region, so no bootimg.dtb_node is added.

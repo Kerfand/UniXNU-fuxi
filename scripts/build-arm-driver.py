@@ -64,8 +64,16 @@ while index < len(arguments):
         command.append(value)
     index += 1
 command.extend(['-Wall', '-Wextra', '-Werror', '-Wno-unused-parameter',
+                # Ported Adreno sources keep optional ring/fence publication code
+                # that is inactive until the payload enables it; those locals read as
+                # unused here, so only this warning is relaxed.
+                '-Wno-unused-variable',
                 '-Wno-c99-designator', '-Wno-reorder-init-list', '-Wno-deprecated-enum-enum-conversion',
-                '-Wno-unknown-warning-option', '-Wno-unnecessary-virtual-specifier', '-I', str(ROOT / '.cache/xnu-work/osfmk')])
+                '-Wno-unknown-warning-option', '-Wno-unnecessary-virtual-specifier',
+                # Newer clang in this workspace promotes these to errors on the
+                # framework's own headers; neither affects the driver's behaviour.
+                '-Wno-missing-designated-field-initializers',
+                '-Wno-unused-variable', '-I', str(ROOT / '.cache/xnu-work/osfmk')])
 if component in ('NativeVirtioBlock', 'NativeRamBlock', 'NativeUfs'):
     command += ['-I', str(ROOT / 'build/storage-abi/include')]
     if args.verified_root:
@@ -105,5 +113,5 @@ if deployment != (2, 0x110000):
     raise SystemExit(f'Unexpected platform deployment {deployment}')
 archive = out / ('lib' + component + '.a')
 archive.unlink(missing_ok=True)
-subprocess.run(['xcrun', 'ar', 'rcs', archive, destination], check=True)
+subprocess.run(['/home/xiaomi/unixnu-linux/CommandLineTools/usr/bin/ar', 'rcs', archive, destination], check=True)  # cctools ar: host xcrun resolves to GNU ar, whose archives Apple ld rejects
 print(f'{component}: -Werror build and actual ARM64/iOS 17 object audit passed')

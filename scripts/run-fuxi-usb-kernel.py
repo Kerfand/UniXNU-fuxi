@@ -3,6 +3,7 @@
 from pathlib import Path
 import shlex
 import subprocess
+import time
 
 root = Path(__file__).resolve().parents[1]
 core = root.parents[2]
@@ -21,7 +22,10 @@ prepare = '''python3 "$ROOT/scripts/prepare-fuxi-usb-debug.py" \
 QUD_MODULE="$ROOT/.cache/fuxi-qud-module"
 QUD_PATCHER="$QUD_MODULE/scripts/xnu_patches.py"
 QUD_STATE=$(python3 "$QUD_PATCHER" status --xnu "$ROOT/.cache/xnu-work" --profile darwin23-fuxi)
-if [[ "$QUD_STATE" == *'"state_before": "applied"'* ]]; then
+# Only when the tree is still unpatched: after the framework series is in place, reversing
+# here would move bsd_init.c away from the context the owner patches were applied against.
+if [[ "$QUD_STATE" == *'"state_before": "applied"'* ]] && \
+   ! grep -q native_owner_cache_prepare "$ROOT/.cache/xnu-work/bsd/kern/kern_exec.c" 2>/dev/null; then
   python3 "$QUD_PATCHER" reverse --xnu "$ROOT/.cache/xnu-work" --profile darwin23-fuxi
 fi
 '''
@@ -29,8 +33,11 @@ if text.count(anchor) != 1:
     raise SystemExit('kernel patch preparation anchor changed')
 text = text.replace(anchor, prepare + '\n' + anchor)
 anchor = 'export XNU_AVAILABILITY_PL=$ROOT/.cache/fakeroot/usr/local/libexec/availability.pl'
-apply = '''python3 "$QUD_PATCHER" check --xnu "$ROOT/.cache/xnu-work" --profile darwin23-fuxi
-python3 "$QUD_PATCHER" apply --xnu "$ROOT/.cache/xnu-work" --profile darwin23-fuxi
+apply = '''QUD_STATE2=$(python3 "$QUD_PATCHER" status --xnu "$ROOT/.cache/xnu-work" --profile darwin23-fuxi)
+if [[ "$QUD_STATE2" == *'"state_before": "ready"'* ]]; then
+  python3 "$QUD_PATCHER" check --xnu "$ROOT/.cache/xnu-work" --profile darwin23-fuxi
+  python3 "$QUD_PATCHER" apply --xnu "$ROOT/.cache/xnu-work" --profile darwin23-fuxi
+fi
 '''
 if text.count(anchor) != 1:
     raise SystemExit('kernel patch completion anchor changed')
@@ -60,14 +67,23 @@ out.parent.mkdir(parents=True, exist_ok=True)
 out.write_text(text)
 marker = root / '.cache/fuxi-usb-bootstrap'
 first_pass = not marker.exists()
+started = time.time()
 result = subprocess.run(['bash', str(out)], cwd=root)
+if first_pass and result.returncode == 0:
+    # A configuration whose kernel needs no archive symbol links cleanly on the first pass;
+    # that is not a failure, and there is nothing to wait for.
+    print('fuxi USB bootstrap pass linked the kernel directly; skipping the archive wait')
+    raise SystemExit(0)
 if first_pass:
     # The driver runs this recipe twice. The first pass only has to produce the
     # compile records, and it always stops at the kernel link because no archive
     # step has run yet (libQcomXnuUsbDebug.a, the UFS kit, the stub). Tolerating
     # that lets the driver reach those steps; the second invocation is the real
     # link and keeps its exit status.
-    records = sorted(root.glob('build/xnu/**/link.filelist'))
+    # A record file left by an earlier pass must not mask a compile failure: only
+    # records this run touched count.
+    records = sorted(p for p in root.glob('build/xnu/**/link.filelist')
+                     if p.stat().st_mtime >= started - 1)
     if not records:
         # A broken patch or a compile error fails here too, and the tail of the log is
         # then just the usual link failure. Without this check the driver carried on to
