@@ -66,8 +66,13 @@ def find_clang_include() -> Path:
 
 
 def _place(source: Path, destination: Path) -> None:
+    # Empty imported placeholders must not shadow real XNU declarations.
+    if source.is_file() and source.stat().st_size == 0:
+        return
     if source.is_dir():
-        shutil.copytree(source, destination, dirs_exist_ok=True)
+        destination.mkdir(parents=True, exist_ok=True)
+        for child in source.iterdir():
+            _place(child, destination / child.name)
     else:
         destination.parent.mkdir(parents=True, exist_ok=True)
         if destination.is_symlink():
