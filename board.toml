@@ -103,6 +103,7 @@ archives = [
   "build-mockfs-fixture.py",
   # Bounded, no-MMIO service publication test for this exact iPhone10,3 cache.
   "build-fuxi-platform-power.py",
+  "build-arm-driver.py NativeVirtioBlock",
   "build-arm-driver.py NativeRamBlock",
   "build-arm-driver.py NativeAES",
   "build-software-aes-bindings.py --objects-dir build/native-aes",

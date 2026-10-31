@@ -6,6 +6,7 @@ from pathlib import Path
 import shutil
 import subprocess
 import sys
+import time
 
 root = Path(__file__).resolve().parents[1]
 module = root / '.cache/fuxi-qud-module'
@@ -27,9 +28,13 @@ if not llvm.is_dir():
         if '-D_POSIX_C_SOURCE' not in source and "'-std=c11'," in source:
             staged_check.write_text(source.replace("'-std=c11',",
                                                  "'-std=c11', '-D_POSIX_C_SOURCE=200809L',", 1))
-def run(arguments):
+def run(arguments, *, host_test=False):
     command = [str(v) for v in arguments]
-    result = subprocess.run(command, cwd=root, capture_output=True, text=True)
+    environment = dict(os.environ)
+    if host_test:
+        # Host Clang must not inherit options for the patched XNU compiler.
+        environment.pop("CCC_OVERRIDE_OPTIONS", None)
+    result = subprocess.run(command, cwd=root, env=environment, capture_output=True, text=True)
     print(result.stdout, end='')
     if result.returncode:
         print(result.stderr, end='')
@@ -41,8 +46,14 @@ def run(arguments):
                         print(log.name, content[-6500:])
         raise SystemExit(result.returncode)
 
+# Each upstream checker requires a fresh output directory; preserve prior evidence.
+for previous in (out, root / '.cache/fuxi-qud-model-check', root / '.cache/fuxi-qud-xnu-check'):
+    if previous.exists():
+        assert previous.parent.resolve() == (root / '.cache').resolve()
+        previous.rename(previous.with_name(previous.name + '.previous-' + str(time.time_ns())))
+
 run([sys.executable, module / 'tests/check.py', '--target-clang', llvm / 'clang',
-     '--output', root / '.cache/fuxi-qud-model-check'])
+     '--output', root / '.cache/fuxi-qud-model-check'], host_test=True)
 matches = list(records.glob('**/pe_kprintf.o.json'))
 if len(matches) != 1:
     raise SystemExit('missing or ambiguous actual PE compile record')
